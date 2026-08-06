@@ -41,11 +41,16 @@ export class Player {
 
   // Must be called from inside a user gesture or the context stays suspended.
   unlockAudio() {
-    if (this.audioCtx) return this.audioCtx.resume();
-    const Ctx = window.AudioContext || window.webkitAudioContext;
-    if (!Ctx) return Promise.resolve();
-    this.audioCtx = new Ctx();
-    return this.audioCtx.resume();
+    try {
+      if (!this.audioCtx) {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return Promise.resolve();
+        this.audioCtx = new Ctx();
+      }
+      return this.audioCtx.resume();
+    } catch (err) {
+      return Promise.reject(err);
+    }
   }
 
   beep(frequency, durationMs, volume = 0.35) {
@@ -93,7 +98,7 @@ export class Player {
 
   // --- Lifecycle -------------------------------------------------------------
 
-  async start(workout, resumeState = null) {
+  start(workout, resumeState = null) {
     this.workout = workout;
     this.steps = workout.steps;
     this.startedAt = resumeState?.startedAt || new Date().toISOString();
@@ -101,8 +106,11 @@ export class Player {
     this.skippedStepIds = resumeState?.skippedStepIds || [];
     this.index = resumeState?.currentStepIndex ?? 0;
 
-    await this.unlockAudio();
-    await this.requestWakeLock();
+    // Deliberately not awaited. `AudioContext.resume()` never settles until the page has
+    // user activation, so awaiting it means a workout that silently never starts. Cues
+    // are a nicety; the timer is the product, and it must run either way.
+    this.unlockAudio().catch(() => {});
+    this.requestWakeLock();
 
     this.enterStep(this.index, resumeState?.stepElapsedSeconds || 0);
     this.setStatus('running');
@@ -197,7 +205,7 @@ export class Player {
     this.onTick(this.snapshot());
   }
 
-  async resume() {
+  resume() {
     if (this.status !== 'paused') return;
     const step = this.currentStep();
     if (step?.target.mode === 'duration') {
@@ -205,7 +213,10 @@ export class Player {
       this.stepStartedAt = this.stepDeadline - step.target.seconds * 1000;
     }
     this.setStatus('running');
-    await this.requestWakeLock();
+    // Resume is a tap, so this is the reliable moment to unlock audio if the initial
+    // start could not. Neither call blocks the timer restarting.
+    this.unlockAudio().catch(() => {});
+    this.requestWakeLock();
     this.startTicker();
   }
 

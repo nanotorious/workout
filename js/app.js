@@ -369,7 +369,7 @@ async function startWorkout(resumeDraft = null) {
   });
 
   showView('play');
-  await player.start(workout, resumeDraft);
+  player.start(workout, resumeDraft);
 }
 
 $('start-workout').addEventListener('click', () => {
