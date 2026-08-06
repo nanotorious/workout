@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0b0d10">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Workout">
+<title>Workout</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<!-- Home -->
+<section class="view" id="view-home" data-view="home">
+  <header class="app-header">
+    <h1>Workout</h1>
+    <div>
+      <button class="link-btn" id="home-import" type="button">Import</button>
+      <button class="link-btn" id="home-export" type="button">Export</button>
+    </div>
+  </header>
+  <input type="file" id="import-file" accept="application/json,.json" class="hidden">
+
+  <div class="resume-banner hidden" id="resume-banner">
+    <div>
+      <strong>Workout in progress</strong>
+      <span class="muted" id="resume-detail"></span>
+    </div>
+    <div class="resume-actions">
+      <button class="btn btn-primary" id="resume-continue" type="button">Resume</button>
+      <button class="btn btn-quiet" id="resume-discard" type="button">Discard</button>
+    </div>
+  </div>
+
+  <div class="home-actions">
+    <button class="big-action" id="go-compose" type="button">
+      <span class="big-action-title">Compose Workout</span>
+      <span class="big-action-sub">Build a timeline step by step</span>
+    </button>
+    <button class="big-action" id="go-pattern" type="button">
+      <span class="big-action-title">Use a Pattern</span>
+      <span class="big-action-sub">Primary → anchor → rest, generated</span>
+    </button>
+  </div>
+
+  <h2 class="section-title">Templates</h2>
+  <div id="template-list" class="card-list"></div>
+
+  <h2 class="section-title">Recent sessions</h2>
+  <div id="session-list" class="card-list"></div>
+</section>
+
+<!-- Compose -->
+<section class="view hidden" id="view-compose" data-view="compose">
+  <header class="app-header">
+    <button class="link-btn" data-back="home" type="button">Back</button>
+    <h1 id="compose-title">Compose</h1>
+    <button class="link-btn" id="compose-save-template" type="button">Save</button>
+  </header>
+
+  <div class="summary-bar">
+    <span id="compose-summary">empty</span>
+  </div>
+
+  <ol class="timeline" id="timeline"></ol>
+
+  <div class="compose-tools">
+    <button class="btn" id="add-exercise" type="button">+ Exercise</button>
+    <button class="btn" id="add-rest" type="button">+ Rest</button>
+    <button class="btn btn-quiet" id="repeat-all" type="button">Repeat all</button>
+  </div>
+
+  <div class="sticky-footer">
+    <button class="btn btn-primary btn-large" id="start-workout" type="button">Start workout</button>
+  </div>
+</section>
+
+<!-- Pattern builder -->
+<section class="view hidden" id="view-pattern" data-view="pattern">
+  <header class="app-header">
+    <button class="link-btn" data-back="home" type="button">Back</button>
+    <h1>Pattern</h1>
+    <span></span>
+  </header>
+
+  <p class="hint">
+    Each primary exercise is followed by the anchor exercise, then a rest. The trailing
+    rest is dropped so the workout ends on work.
+  </p>
+
+  <div class="field">
+    <label>Primary exercises</label>
+    <div id="pattern-primaries" class="chip-row"></div>
+    <button class="btn" id="pattern-add-primary" type="button">+ Add primary</button>
+  </div>
+
+  <div class="field">
+    <label for="pattern-primary-seconds">Primary duration (seconds)</label>
+    <input type="number" id="pattern-primary-seconds" value="30" min="5" max="600" inputmode="numeric">
+  </div>
+
+  <div class="field">
+    <label>Anchor exercise</label>
+    <div class="row">
+      <span id="pattern-anchor-name" class="muted">None</span>
+      <button class="btn" id="pattern-pick-anchor" type="button">Choose</button>
+      <button class="btn btn-quiet" id="pattern-clear-anchor" type="button">Clear</button>
+    </div>
+  </div>
+
+  <div class="field">
+    <label for="pattern-anchor-seconds">Anchor duration (seconds)</label>
+    <input type="number" id="pattern-anchor-seconds" value="30" min="5" max="600" inputmode="numeric">
+  </div>
+
+  <div class="field">
+    <label for="pattern-rest-seconds">Rest (seconds)</label>
+    <input type="number" id="pattern-rest-seconds" value="30" min="0" max="600" inputmode="numeric">
+  </div>
+
+  <div class="field">
+    <label for="pattern-rounds">Rounds</label>
+    <input type="number" id="pattern-rounds" value="1" min="1" max="20" inputmode="numeric">
+  </div>
+
+  <div class="summary-bar"><span id="pattern-summary">no primaries chosen</span></div>
+
+  <div class="sticky-footer">
+    <button class="btn btn-primary btn-large" id="pattern-generate" type="button">Generate timeline</button>
+  </div>
+</section>
+
+<!-- Player -->
+<section class="view hidden player" id="view-play" data-view="play">
+  <div class="play-progress"><div class="play-progress-fill" id="play-progress-fill"></div></div>
+
+  <div class="play-meta">
+    <span id="play-position">1 / 1</span>
+    <span id="play-total-remaining"></span>
+  </div>
+
+  <div class="play-main" id="play-main">
+    <div class="play-kind" id="play-kind">Work</div>
+    <h2 class="play-exercise" id="play-exercise">—</h2>
+    <div class="play-count" id="play-count">0</div>
+    <div class="play-detail" id="play-detail"></div>
+    <button class="btn btn-primary btn-large hidden" id="play-reps-done" type="button">Done</button>
+  </div>
+
+  <div class="play-next">
+    Next: <strong id="play-next">—</strong>
+  </div>
+
+  <div class="play-controls">
+    <button class="btn" id="play-prev" type="button">Prev</button>
+    <button class="btn" id="play-restart" type="button">Restart</button>
+    <button class="btn btn-primary" id="play-pause" type="button">Pause</button>
+    <button class="btn" id="play-add-ten" type="button">+10s</button>
+    <button class="btn" id="play-skip" type="button">Skip</button>
+  </div>
+
+  <div class="play-controls">
+    <button class="btn btn-quiet" id="play-edit" type="button">Edit upcoming</button>
+    <button class="btn btn-quiet" id="play-quit" type="button">End workout</button>
+  </div>
+</section>
+
+<!-- Finish -->
+<section class="view hidden" id="view-finish" data-view="finish">
+  <header class="app-header"><h1>Finished</h1></header>
+  <div class="finish-summary" id="finish-summary"></div>
+  <div class="field">
+    <label for="finish-name">Name (optional)</label>
+    <input type="text" id="finish-name" placeholder="e.g. Kettlebell 15">
+  </div>
+  <div class="field">
+    <label for="finish-note">Note (optional)</label>
+    <input type="text" id="finish-note" placeholder="How did it feel?">
+  </div>
+  <div class="finish-actions">
+    <button class="btn btn-primary btn-large" id="finish-save-template" type="button">Save as template</button>
+    <button class="btn btn-large" id="finish-save-history" type="button">Save to history only</button>
+    <button class="btn btn-quiet btn-large" id="finish-discard" type="button">Discard</button>
+  </div>
+</section>
+
+<!-- Exercise picker -->
+<div class="sheet hidden" id="picker">
+  <div class="sheet-panel">
+    <header class="sheet-header">
+      <input type="search" id="picker-search" placeholder="Search exercises" autocomplete="off">
+      <button class="link-btn" id="picker-close" type="button">Close</button>
+    </header>
+    <div class="sheet-body" id="picker-results"></div>
+    <footer class="sheet-footer">
+      <button class="btn" id="picker-add-custom" type="button">+ Add custom exercise</button>
+    </footer>
+  </div>
+</div>
+
+<!-- Step editor -->
+<div class="sheet hidden" id="step-editor">
+  <div class="sheet-panel">
+    <header class="sheet-header">
+      <strong id="step-editor-title">Edit step</strong>
+      <button class="link-btn" id="step-editor-close" type="button">Close</button>
+    </header>
+    <div class="sheet-body">
+      <div class="field">
+        <label>Target</label>
+        <div class="seg" id="step-mode">
+          <button class="seg-btn" data-mode="duration" type="button">Time</button>
+          <button class="seg-btn" data-mode="reps" type="button">Reps</button>
+        </div>
+      </div>
+      <div class="field">
+        <label id="step-value-label" for="step-value">Seconds</label>
+        <input type="number" id="step-value" min="1" max="900" inputmode="numeric">
+        <div class="chip-row" id="step-presets"></div>
+      </div>
+      <div class="field" id="step-side-field">
+        <label>Side</label>
+        <div class="seg" id="step-side">
+          <button class="seg-btn" data-side="" type="button">—</button>
+          <button class="seg-btn" data-side="left" type="button">L</button>
+          <button class="seg-btn" data-side="right" type="button">R</button>
+          <button class="seg-btn" data-side="alternating" type="button">Alt</button>
+        </div>
+      </div>
+      <div class="field" id="step-load-field">
+        <label for="step-load">Weight (kg, optional)</label>
+        <input type="number" id="step-load" min="0" max="500" step="0.5" inputmode="decimal">
+      </div>
+      <div class="step-editor-actions">
+        <button class="btn" id="step-duplicate" type="button">Duplicate</button>
+        <button class="btn" id="step-up" type="button">Move up</button>
+        <button class="btn" id="step-down" type="button">Move down</button>
+        <button class="btn btn-danger" id="step-delete" type="button">Delete</button>
+      </div>
+    </div>
+    <footer class="sheet-footer">
+      <button class="btn btn-primary btn-large" id="step-apply" type="button">Apply</button>
+    </footer>
+  </div>
+</div>
+
+<!-- In-app confirm / prompt. Native dialogs block the page and stall the timer. -->
+<div class="sheet hidden" id="dialog">
+  <div class="sheet-panel">
+    <header class="sheet-header"><strong id="dialog-title">Confirm</strong></header>
+    <div class="sheet-body">
+      <p class="muted hidden" id="dialog-message"></p>
+      <input type="text" id="dialog-input" class="hidden" autocomplete="off">
+    </div>
+    <footer class="sheet-footer dialog-actions">
+      <button class="btn btn-large" id="dialog-cancel" type="button">Cancel</button>
+      <button class="btn btn-primary btn-large" id="dialog-confirm" type="button">OK</button>
+    </footer>
+  </div>
+</div>
+
+<div class="toast hidden" id="toast"></div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

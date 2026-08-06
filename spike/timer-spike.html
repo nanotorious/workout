@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Timer Spike — Workout App</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0; min-height: 100vh; background: #0b0d10; color: #f2f4f7;
+    font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 1rem; padding: 1.5rem; text-align: center;
+  }
+  #phase { font-size: 1.5rem; letter-spacing: 0.08em; text-transform: uppercase; color: #7dd3fc; }
+  #count { font-size: clamp(5rem, 30vw, 12rem); font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+  button { font-size: 1.25rem; padding: 1rem 2rem; border-radius: 999px; border: 0; background: #22d3ee; color: #08121a; font-weight: 700; }
+  #log { width: 100%; max-width: 34rem; text-align: left; font-family: ui-monospace, Menlo, monospace; font-size: 0.8rem; background: #12161c; border-radius: 0.75rem; padding: 0.75rem; max-height: 40vh; overflow-y: auto; white-space: pre-wrap; }
+  .caps { font-size: 0.8rem; color: #94a3b8; }
+</style>
+</head>
+<body>
+
+<div id="phase">Ready</div>
+<div id="count">30</div>
+<button id="start">Start spike</button>
+<div class="caps" id="caps"></div>
+<div id="log">Log:</div>
+
+<script>
+// Stage 0 spike — 1-workoutApp/HANDOFF.md
+// Purpose: find out whether a phone can auto-advance intervals and beep with the
+// screen locked. Answers go into STATUS.md. This file is throwaway; do not build on it.
+
+const phaseEl = document.getElementById('phase');
+const countEl = document.getElementById('count');
+const logEl = document.getElementById('log');
+const capsEl = document.getElementById('caps');
+
+const PHASES = [
+  { name: 'Work', seconds: 30 },
+  { name: 'Rest', seconds: 15 },
+  { name: 'Work', seconds: 30 }
+];
+
+let audioCtx = null;
+let wakeLock = null;
+let phaseIndex = 0;
+let deadline = 0;
+let ticker = null;
+let beepedAt = new Set();
+
+function log(msg) {
+  const t = new Date().toLocaleTimeString('en-GB', { hour12: false });
+  logEl.textContent += `\n[${t}] ${msg}`;
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+capsEl.textContent = [
+  'vibrate: ' + ('vibrate' in navigator),
+  'wakeLock: ' + ('wakeLock' in navigator),
+  'AudioContext: ' + !!(window.AudioContext || window.webkitAudioContext)
+].join(' · ');
+
+function beep(frequency, durationMs) {
+  if (!audioCtx) return;
+  // Resume defensively: iOS suspends the context when the page is backgrounded.
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.frequency.value = frequency;
+  osc.type = 'sine';
+  gain.gain.setValueAtTime(0.001, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.4, audioCtx.currentTime + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + durationMs / 1000);
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start();
+  osc.stop(audioCtx.currentTime + durationMs / 1000 + 0.02);
+}
+
+async function requestWakeLock() {
+  if (!('wakeLock' in navigator)) { log('wakeLock unsupported'); return; }
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    log('wakeLock acquired');
+    wakeLock.addEventListener('release', () => log('wakeLock released by system'));
+  } catch (err) {
+    log('wakeLock failed: ' + err.message);
+  }
+}
+
+function startPhase(index) {
+  phaseIndex = index;
+  const phase = PHASES[index];
+  phaseEl.textContent = phase.name;
+  deadline = Date.now() + phase.seconds * 1000;
+  beepedAt = new Set();
+  log(`phase ${index + 1}/${PHASES.length} start: ${phase.name} ${phase.seconds}s`);
+  beep(880, 150);
+  if ('vibrate' in navigator) navigator.vibrate(200);
+}
+
+function tick() {
+  // Deadline-based, never accumulated: a throttled tab drifts in *display* refresh
+  // but not in elapsed time, so a backgrounded phase still ends at the right moment.
+  const remainingMs = deadline - Date.now();
+  const remaining = Math.max(0, Math.ceil(remainingMs / 1000));
+  countEl.textContent = remaining;
+
+  if (remaining <= 3 && remaining > 0 && !beepedAt.has(remaining)) {
+    beepedAt.add(remaining);
+    beep(660, 100);
+    log(`countdown beep at ${remaining}`);
+  }
+
+  if (remainingMs <= 0) {
+    if (phaseIndex + 1 < PHASES.length) {
+      startPhase(phaseIndex + 1);
+    } else {
+      clearInterval(ticker);
+      ticker = null;
+      phaseEl.textContent = 'Done';
+      beep(1200, 400);
+      log('SPIKE COMPLETE — check whether the beeps were audible with the screen locked');
+      if (wakeLock) { wakeLock.release(); wakeLock = null; }
+    }
+  }
+}
+
+document.getElementById('start').addEventListener('click', async () => {
+  // Audio must be created inside a user gesture or it stays suspended.
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  await audioCtx.resume();
+  log('audio context: ' + audioCtx.state);
+  await requestWakeLock();
+  document.getElementById('start').disabled = true;
+  startPhase(0);
+  ticker = setInterval(tick, 200);
+  tick();
+});
+
+document.addEventListener('visibilitychange', async () => {
+  log('visibility: ' + document.visibilityState);
+  if (document.visibilityState === 'visible') {
+    if (audioCtx && audioCtx.state === 'suspended') {
+      await audioCtx.resume();
+      log('audio resumed on return: ' + audioCtx.state);
+    }
+    if (ticker && !wakeLock) requestWakeLock();
+  }
+});
+</script>
+
+</body>
+</html>

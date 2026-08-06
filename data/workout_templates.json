@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-08-06",
+  "templates": [
+    {
+      "id": "r0546_kettlebell_pattern",
+      "name": "R0546-Style Kettlebell Pattern",
+      "source_ref": "R0546",
+      "status": "starter",
+      "composer_mode": "pattern",
+      "pattern": {
+        "type": "primary_anchor_rest",
+        "primary_exercise_ids": [
+          "goblet_squat",
+          "kettlebell_snatch",
+          "reverse_lunge",
+          "single_arm_row"
+        ],
+        "primary_target": {
+          "mode": "duration",
+          "seconds": 30
+        },
+        "anchor": {
+          "exercise_id": "kettlebell_swing",
+          "target": {
+            "mode": "duration",
+            "seconds": 30
+          }
+        },
+        "rest_seconds": 30,
+        "rounds": 1
+      },
+      "behavior": {
+        "expand_to_editable_timeline": true,
+        "start_without_saving": true,
+        "preserve_template_during_live_edits": true
+      }
+    }
+  ]
+}
