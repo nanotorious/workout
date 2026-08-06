@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<meta name="theme-color" content="#0b0d10">
+<meta name="theme-color" content="#080807">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Workout">
@@ -15,14 +15,23 @@
 
 <!-- Home -->
 <section class="view" id="view-home" data-view="home">
-  <header class="app-header">
-    <h1>Workout</h1>
-    <div>
-      <button class="link-btn" id="home-import" type="button">Import</button>
-      <button class="link-btn" id="home-export" type="button">Export</button>
+  <header class="app-header home-header">
+    <div class="brand-lockup" aria-label="DailyMAC Workout">
+      <span class="brand-mark" aria-hidden="true">NW</span>
+      <span class="brand-copy"><small>DailyMAC</small><strong>Workout</strong></span>
+    </div>
+    <div class="header-tools">
+      <button class="link-btn utility-btn" id="home-import" type="button">Import</button>
+      <button class="link-btn utility-btn" id="home-export" type="button">Export</button>
     </div>
   </header>
   <input type="file" id="import-file" accept="application/json,.json" class="hidden">
+
+  <div class="home-intro">
+    <span class="eyebrow">Workout system / 01</span>
+    <h1>Build what you<br>need today.</h1>
+    <p>Compose a session in seconds, then let the interval player keep you moving.</p>
+  </div>
 
   <div class="resume-banner hidden" id="resume-banner">
     <div>
@@ -36,20 +45,24 @@
   </div>
 
   <div class="home-actions">
-    <button class="big-action" id="go-compose" type="button">
+    <button class="big-action big-action-featured" id="go-compose" type="button">
+      <span class="big-action-index">01 / Quick build</span>
       <span class="big-action-title">Compose Workout</span>
       <span class="big-action-sub">Build a timeline step by step</span>
+      <span class="big-action-arrow" aria-hidden="true">↗</span>
     </button>
     <button class="big-action" id="go-pattern" type="button">
+      <span class="big-action-index">02 / Repeat structure</span>
       <span class="big-action-title">Use a Pattern</span>
       <span class="big-action-sub">Primary → anchor → rest, generated</span>
+      <span class="big-action-arrow" aria-hidden="true">↗</span>
     </button>
   </div>
 
-  <h2 class="section-title">Templates</h2>
+  <h2 class="section-title"><span>Templates</span><span>02</span></h2>
   <div id="template-list" class="card-list"></div>
 
-  <h2 class="section-title">Recent sessions</h2>
+  <h2 class="section-title"><span>Recent sessions</span><span>03</span></h2>
   <div id="session-list" class="card-list"></div>
 </section>
 
@@ -60,6 +73,8 @@
     <h1 id="compose-title">Compose</h1>
     <button class="link-btn" id="compose-save-template" type="button">Save</button>
   </header>
+
+  <p class="view-kicker">Timeline / tap any step to tune it</p>
 
   <div class="summary-bar">
     <span id="compose-summary">empty</span>
@@ -86,7 +101,7 @@
     <span></span>
   </header>
 
-  <p class="hint">
+  <p class="hint pattern-intro">
     Each primary exercise is followed by the anchor exercise, then a rest. The trailing
     rest is dropped so the workout ends on work.
   </p>
@@ -135,6 +150,7 @@
 
 <!-- Player -->
 <section class="view hidden player" id="view-play" data-view="play">
+  <div class="player-label"><span class="status-dot"></span> Live session</div>
   <div class="play-progress"><div class="play-progress-fill" id="play-progress-fill"></div></div>
 
   <div class="play-meta">
@@ -170,7 +186,7 @@
 
 <!-- Finish -->
 <section class="view hidden" id="view-finish" data-view="finish">
-  <header class="app-header"><h1>Finished</h1></header>
+  <header class="app-header finish-header"><div><span class="eyebrow">Session complete</span><h1>Finished</h1></div></header>
   <div class="finish-summary" id="finish-summary"></div>
   <div class="field">
     <label for="finish-name">Name (optional)</label>
