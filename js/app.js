@@ -578,6 +578,12 @@ $('resume-discard').addEventListener('click', async () => {
   await renderHome();
 });
 
+$('home-help').addEventListener('click', () => dialog.alert(
+  'iCloud handoff',
+  '1. On this device, tap Backup.\n2. Save workout-sync.json in iCloud Drive → Workout App Sync.\n3. On the other device, tap Restore and choose that file.\n4. Tap Backup again when you finish.\n\nOn iPhone, choose Save to Files first. Use one device at a time. This is manual, not automatic sync.',
+  'Got it'
+));
+
 $('home-export').addEventListener('click', async () => {
   const payload = await db.exportAll();
   const filename = 'workout-sync.json';

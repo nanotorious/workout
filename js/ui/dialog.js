@@ -48,6 +48,8 @@ function open({ title, message = '', kind, value = '', placeholder = '', confirm
   inputEl.value = value;
   inputEl.placeholder = placeholder;
   inputEl.type = kind === 'number' ? 'number' : 'text';
+  cancelBtn.classList.toggle('hidden', kind === 'alert');
+  cancelBtn.parentElement.classList.toggle('single-action', kind === 'alert');
   confirmBtn.textContent = confirmLabel || 'OK';
   sheet.classList.remove('hidden');
   if (kind === 'prompt') setTimeout(() => inputEl.focus(), 50);
@@ -59,3 +61,6 @@ export const confirm = (title, message, confirmLabel = 'Confirm') =>
 
 export const prompt = (title, { value = '', placeholder = '', confirmLabel = 'Save' } = {}) =>
   open({ title, kind: 'prompt', value, placeholder, confirmLabel });
+
+export const alert = (title, message, confirmLabel = 'Got it') =>
+  open({ title, message, kind: 'alert', confirmLabel });

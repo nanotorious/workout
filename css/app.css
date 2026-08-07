@@ -726,6 +726,8 @@ button:disabled {
 .picker-fav.is-on { color: var(--warning); }
 .step-editor-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem; margin-top: 1rem; }
 .dialog-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem; }
+#dialog-message { white-space: pre-line; line-height: 1.55; }
+.dialog-actions.single-action { grid-template-columns: 1fr; }
 
 /* Toast */
 
