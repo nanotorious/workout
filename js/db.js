@@ -389,15 +389,18 @@ export async function saveSession(session) {
 // Export writes the stored shape verbatim, so an export file is directly comparable
 // with the seed files in data/ — see AUDIT.md F1.
 export async function exportAll() {
-  const [exercises, templates, sessions] = await Promise.all([
-    getAll('exercises'), getAll('templates'), getAll('sessions')
+  const [exercises, templates, sessions, meta] = await Promise.all([
+    getAll('exercises'), getAll('templates'), getAll('sessions'), getAll('meta')
   ]);
   return {
     schema_version: 1,
     exported_at: new Date().toISOString(),
     exercises,
     templates,
-    sessions
+    sessions,
+    deleted_template_ids: meta
+      .filter((row) => row.key.startsWith('deleted_template:') && row.value)
+      .map((row) => row.key.slice('deleted_template:'.length))
   };
 }
 
@@ -412,21 +415,31 @@ export function validateImport(payload) {
       throw new Error(`${store} must be a list`);
     }
   }
+  if (payload.deleted_template_ids !== undefined && !Array.isArray(payload.deleted_template_ids)) {
+    throw new Error('deleted_template_ids must be a list');
+  }
   return true;
 }
 
 export async function importAll(payload) {
   validateImport(payload);
 
-  const counts = { exercises: 0, templates: 0, sessions: 0 };
+  const counts = { exercises: 0, templates: 0, sessions: 0, deletedTemplates: 0 };
   // Merge rather than replace: importing an old backup must not delete newer sessions.
   // Matching ids are overwritten, which makes a repeated import idempotent.
   for (const store of ['exercises', 'templates', 'sessions']) {
     for (const row of payload[store] || []) {
       if (!row?.id) continue;
       await putOne(store, row);
+      if (store === 'templates') await deleteOne('meta', `deleted_template:${row.id}`);
       counts[store] += 1;
     }
+  }
+  for (const id of payload.deleted_template_ids || []) {
+    if (typeof id !== 'string' || !id) continue;
+    await deleteOne('templates', id);
+    await putOne('meta', { key: `deleted_template:${id}`, value: true });
+    counts.deletedTemplates += 1;
   }
   await putOne('meta', { key: 'seeded_at', value: new Date().toISOString() });
   return counts;

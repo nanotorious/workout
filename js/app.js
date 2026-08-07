@@ -580,13 +580,42 @@ $('resume-discard').addEventListener('click', async () => {
 
 $('home-export').addEventListener('click', async () => {
   const payload = await db.exportAll();
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `workout-export-${new Date().toISOString().slice(0, 10)}.json`;
-  link.click();
-  URL.revokeObjectURL(url);
+  const filename = 'workout-sync.json';
+  const file = new File([JSON.stringify(payload, null, 2)], filename,
+    { type: 'application/json' });
+
+  try {
+    // Desktop Chrome can write directly to a user-chosen iCloud Drive file.
+    if ('showSaveFilePicker' in window) {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: filename,
+        types: [{ description: 'Workout backup', accept: { 'application/json': ['.json'] } }]
+      });
+      const writable = await handle.createWritable();
+      await writable.write(file);
+      await writable.close();
+      toast('Backup saved');
+      return;
+    }
+
+    // iPhone PWAs cannot retain an iCloud file handle. The share sheet provides
+    // Save to Files → iCloud Drive without pretending this is automatic sync.
+    if (navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file], title: 'Workout backup' });
+      toast('Backup shared');
+      return;
+    }
+
+    const url = URL.createObjectURL(file);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast('Backup downloaded');
+  } catch (err) {
+    if (err.name !== 'AbortError') toast(`Backup failed: ${err.message}`);
+  }
 });
 
 $('home-import').addEventListener('click', () => $('import-file').click());
@@ -599,7 +628,7 @@ $('import-file').addEventListener('change', async (event) => {
     const counts = await db.importAll(payload);
     await catalog.load();
     await renderHome();
-    toast(`Imported ${counts.sessions} sessions, ${counts.templates} templates`);
+    toast(`Restored ${counts.sessions} sessions, ${counts.templates} templates`);
   } catch (err) {
     toast(`Import failed: ${err.message}`);
   } finally {
