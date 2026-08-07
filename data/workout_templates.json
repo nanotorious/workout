@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-08-06",
+  "updated_at": "2026-08-07",
   "templates": [
     {
       "id": "r0546_kettlebell_pattern",
@@ -34,6 +34,81 @@
         "expand_to_editable_timeline": true,
         "start_without_saving": true,
         "preserve_template_during_live_edits": true
+      }
+    },
+    {
+      "id": "kb_month_15_full_body",
+      "name": "KB Month · 15 Min Full Body",
+      "source_ref": "Kettlebell_Workout_Library.xlsx · VCcar3MA07w",
+      "status": "monthly focus",
+      "composer_mode": "pattern",
+      "pattern": {
+        "type": "primary_anchor_rest",
+        "primary_exercise_ids": ["goblet_squat", "pass_under_lunge", "single_arm_row"],
+        "primary_target": {"mode": "duration", "seconds": 30},
+        "anchor": {"exercise_id": "kettlebell_swing", "target": {"mode": "duration", "seconds": 30}},
+        "rest_seconds": 30,
+        "rounds": 3
+      }
+    },
+    {
+      "id": "kb_month_30_supersets",
+      "name": "KB Month · 30 Min Full Body Supersets",
+      "source_ref": "Kettlebell_Workout_Library.xlsx · 9LIAhxQHmak",
+      "status": "monthly focus",
+      "composer_mode": "pattern",
+      "pattern": {
+        "type": "primary_anchor_rest",
+        "primary_exercise_ids": ["alternating_hand_swing", "sumo_squat_pulse", "uneven_lunge", "staggered_rdl", "static_curtsey_lunge", "lateral_lunge", "overhead_press", "single_arm_chest_press", "tricep_diamond_press", "swing_squat_swing"],
+        "primary_target": {"mode": "duration", "seconds": 30},
+        "anchor": {"exercise_id": "kettlebell_swing", "target": {"mode": "duration", "seconds": 30}},
+        "rest_seconds": 30,
+        "rounds": 2
+      }
+    },
+    {
+      "id": "kb_month_45_full_body",
+      "name": "KB Month · 45 Min Full Body Strength",
+      "source_ref": "Kettlebell_Workout_Library.xlsx · UxfX7Z4am1Q",
+      "status": "monthly focus",
+      "composer_mode": "pattern",
+      "pattern": {
+        "type": "primary_anchor_rest",
+        "primary_exercise_ids": ["kettlebell_windmill", "clean_and_press", "bulgarian_split_squat", "single_leg_glute_bridge"],
+        "primary_target": {"mode": "duration", "seconds": 40},
+        "anchor": null,
+        "rest_seconds": 20,
+        "rounds": 11
+      }
+    },
+    {
+      "id": "kb_month_35_leg_day",
+      "name": "KB Month · 35 Min Leg Day",
+      "source_ref": "Kettlebell_Workout_Library.xlsx · WnP79Rolnpg",
+      "status": "monthly focus",
+      "composer_mode": "pattern",
+      "pattern": {
+        "type": "primary_anchor_rest",
+        "primary_exercise_ids": ["sumo_squat", "single_leg_deadlift"],
+        "primary_target": {"mode": "duration", "seconds": 45},
+        "anchor": {"exercise_id": "swing_to_squat", "target": {"mode": "duration", "seconds": 45}},
+        "rest_seconds": 15,
+        "rounds": 10
+      }
+    },
+    {
+      "id": "kb_month_36_trisets",
+      "name": "KB Month · 36 Min Full Body Tri-Sets",
+      "source_ref": "Kettlebell_Workout_Library.xlsx · VA4laPv2CVo",
+      "status": "monthly focus",
+      "composer_mode": "pattern",
+      "pattern": {
+        "type": "primary_anchor_rest",
+        "primary_exercise_ids": ["goblet_squat_pulse", "landmine_switch_row", "shoulder_push_press", "pullover_russian_twist", "tuck_hollow_toe_reach"],
+        "primary_target": {"mode": "duration", "seconds": 60},
+        "anchor": null,
+        "rest_seconds": 15,
+        "rounds": 6
       }
     }
   ]

@@ -5,6 +5,7 @@
 
 const DB_NAME = 'workoutApp';
 const DB_VERSION = 1;
+const BUNDLED_CONTENT_VERSION = 2;
 const SEED_CATALOG_URL = 'data/exercise_catalog.json';
 const SEED_TEMPLATES_URL = 'data/workout_templates.json';
 
@@ -281,12 +282,36 @@ async function seedIfEmpty() {
 
   await putOne('meta', { key: 'seeded_at', value: new Date().toISOString() });
   await putOne('meta', { key: 'schema_version', value: 1 });
+  await putOne('meta', { key: 'bundled_content_version', value: BUNDLED_CONTENT_VERSION });
   console.info(`[db] seeded ${exercises.length} exercises`);
+}
+
+// Seed files used to be read only on a brand-new install. Bundled monthly templates
+// must also reach an existing phone without clearing its history, custom exercises, or
+// user-made templates. Content updates therefore insert only IDs that are not already
+// present and record their own version independently of the database schema.
+async function syncBundledContent() {
+  const current = await getOne('meta', 'bundled_content_version');
+  if ((current?.value || 0) >= BUNDLED_CONTENT_VERSION) return;
+
+  const catalog = await fetchJson(SEED_CATALOG_URL);
+  const exercises = (catalog.exercises || []).filter((e) => !isUnresolved(e)).map(applySeedDefaults);
+  for (const exercise of exercises) {
+    if (!await getOne('exercises', exercise.id)) await putOne('exercises', exercise);
+  }
+
+  const templates = await fetchJson(SEED_TEMPLATES_URL);
+  for (const template of templates.templates || []) {
+    if (!await getOne('templates', template.id)) await putOne('templates', template);
+  }
+
+  await putOne('meta', { key: 'bundled_content_version', value: BUNDLED_CONTENT_VERSION });
 }
 
 export async function init() {
   await openDb();
   await seedIfEmpty();
+  await syncBundledContent();
 }
 
 // --- Public API --------------------------------------------------------------
