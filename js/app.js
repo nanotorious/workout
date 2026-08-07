@@ -19,6 +19,7 @@ const state = {
   steps: [],
   workout: null,
   sourceTemplateId: null,
+  sourceTemplate: null,
   editingDuringPlayback: false,
   patternPrimaries: [],
   patternAnchorId: null
@@ -133,6 +134,7 @@ async function openTemplate(template) {
   // back to the template (COMPOSER_SPEC.md → Saving Behavior).
   state.steps = compileTemplate(template, catalog.byId());
   state.sourceTemplateId = template.id;
+  state.sourceTemplate = template;
   $('compose-title').textContent = template.name;
   renderCompose();
   showView('compose');
@@ -176,7 +178,42 @@ function renderCompose() {
     ? `${state.steps.length} steps · ${describeDuration(state.steps)}${hasRepSteps ? ' (rep steps have no fixed length)' : ''}`
     : 'empty';
   $('start-workout').disabled = !state.steps.length;
+  renderTemplateDetailActions();
 }
+
+function renderTemplateDetailActions() {
+  const wrap = $('template-detail-actions');
+  const template = state.sourceTemplate;
+  const visible = Boolean(template) && !state.editingDuringPlayback;
+  wrap.classList.toggle('hidden', !visible);
+  if (!visible) return;
+
+  const video = $('template-follow-video');
+  video.classList.toggle('hidden', !template.videoUrl);
+  if (template.videoUrl) {
+    video.href = template.videoUrl;
+    video.setAttribute('aria-label', `Follow ${template.name} video`);
+  } else {
+    video.removeAttribute('href');
+  }
+}
+
+$('template-delete').addEventListener('click', async () => {
+  const template = state.sourceTemplate;
+  if (!template) return;
+  const confirmed = await dialog.confirm(
+    `Delete “${template.name}”?`,
+    'This removes the template. Your workout history is unchanged, and this open timeline will remain available.',
+    'Delete'
+  );
+  if (!confirmed) return;
+
+  await db.deleteTemplate(template.id);
+  state.sourceTemplateId = null;
+  state.sourceTemplate = null;
+  renderTemplateDetailActions();
+  toast('Template deleted');
+});
 
 async function editStep(stepId) {
   const step = state.steps.find((candidate) => candidate.id === stepId);
@@ -315,6 +352,7 @@ $('pattern-generate').addEventListener('click', () => {
   // Once generated these are ordinary steps — the compiler owns nothing afterwards.
   state.steps = buildPatternSteps();
   state.sourceTemplateId = null;
+  state.sourceTemplate = null;
   $('compose-title').textContent = 'Compose';
   renderCompose();
   showView('compose');
@@ -488,6 +526,7 @@ async function goHome() {
   state.steps = [];
   state.workout = null;
   state.sourceTemplateId = null;
+  state.sourceTemplate = null;
   state.editingDuringPlayback = false;
   pendingFinish = null;
   $('compose-title').textContent = 'Compose';
@@ -512,6 +551,7 @@ for (const button of document.querySelectorAll('[data-back]')) {
 $('go-compose').addEventListener('click', () => {
   state.steps = [];
   state.sourceTemplateId = null;
+  state.sourceTemplate = null;
   $('compose-title').textContent = 'Compose';
   renderCompose();
   showView('compose');

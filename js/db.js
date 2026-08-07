@@ -304,6 +304,7 @@ async function syncBundledContent() {
 
   const templates = await fetchJson(SEED_TEMPLATES_URL);
   for (const template of templates.templates || []) {
+    if (await getOne('meta', `deleted_template:${template.id}`)) continue;
     const existing = await getOne('templates', template.id);
     // Monthly-focus templates are managed bundled content. Refresh them so a link or
     // timing correction reaches phones that received an earlier version. User-created
@@ -344,11 +345,14 @@ export async function getTemplate(id) {
 
 export async function saveTemplate(template) {
   await putOne('templates', templateToStored(template));
+  await deleteOne('meta', `deleted_template:${template.id}`);
   return template;
 }
 
 export async function deleteTemplate(id) {
   await deleteOne('templates', id);
+  // A later bundled-content update must not resurrect a template deliberately removed.
+  await putOne('meta', { key: `deleted_template:${id}`, value: true });
 }
 
 export async function getDraft() {
