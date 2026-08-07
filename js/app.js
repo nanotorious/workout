@@ -27,6 +27,31 @@ const state = {
 
 let player = null;
 
+const MOTIVATION_QUOTES = [
+  'Show up. Build momentum.',
+  'One set at a time.',
+  'Make today count.',
+  'Strong starts now.',
+  'Do the next interval.',
+  'Small sessions still count.',
+  'Move with purpose.',
+  'Earn tomorrow’s strength.',
+  'Start steady. Finish strong.',
+  'Consistency changes everything.',
+  'Your future strength starts here.',
+  'Progress follows practice.'
+];
+
+function renderMotivation() {
+  let previous = -1;
+  try { previous = Number(localStorage.getItem('workout.lastMotivation')); } catch {}
+
+  let index = Math.floor(Math.random() * MOTIVATION_QUOTES.length);
+  if (index === previous) index = (index + 1) % MOTIVATION_QUOTES.length;
+  $('motivation-quote').textContent = MOTIVATION_QUOTES[index];
+  try { localStorage.setItem('workout.lastMotivation', String(index)); } catch {}
+}
+
 // --- View switching ----------------------------------------------------------
 
 function showView(name) {
@@ -652,6 +677,7 @@ window.addEventListener('pagehide', () => {
 // --- Bootstrap ---------------------------------------------------------------
 
 async function init() {
+  renderMotivation();
   await db.init();
   await catalog.load();
   await renderHome();

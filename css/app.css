@@ -140,9 +140,9 @@ button:disabled {
 
 .home-intro { margin-bottom: 2rem; }
 .home-intro h1 {
-  max-width: 10ch;
+  max-width: 13ch;
   margin: 0.7rem 0 0.85rem;
-  font-size: clamp(3rem, 15vw, 5.7rem);
+  font-size: clamp(2.8rem, 13vw, 5.2rem);
   font-weight: 760;
   letter-spacing: -0.07em;
   line-height: 0.88;
