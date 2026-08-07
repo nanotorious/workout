@@ -4,7 +4,7 @@
 // Cache-first for the shell, network-first for the seed JSON so a corrected catalogue
 // is picked up when the network happens to be there.
 
-const CACHE = 'workout-v9';
+const CACHE = 'workout-v10';
 
 const SHELL = [
   './',

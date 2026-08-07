@@ -5,7 +5,7 @@
 
 const DB_NAME = 'workoutApp';
 const DB_VERSION = 1;
-const BUNDLED_CONTENT_VERSION = 3;
+const BUNDLED_CONTENT_VERSION = 4;
 const SEED_CATALOG_URL = 'data/exercise_catalog.json';
 const SEED_TEMPLATES_URL = 'data/workout_templates.json';
 
@@ -172,12 +172,20 @@ function draftToStored(draft) {
   };
 }
 
+function bundledVideoUrl(stored) {
+  if (stored.video_url) return stored.video_url;
+  if (stored.id === 'r0546_kettlebell_pattern') return 'https://youtu.be/VCcar3MA07w';
+  if (stored.status !== 'monthly focus') return null;
+  const match = (stored.source_ref || '').match(/([A-Za-z0-9_-]{11})$/);
+  return match ? `https://youtu.be/${match[1]}` : null;
+}
+
 function templateFromStored(stored) {
   return {
     id: stored.id,
     name: stored.name,
     sourceRef: stored.source_ref || null,
-    videoUrl: stored.video_url || null,
+    videoUrl: bundledVideoUrl(stored),
     status: stored.status || 'user',
     composerMode: stored.composer_mode || 'timeline',
     pattern: stored.pattern || null,
@@ -306,10 +314,10 @@ async function syncBundledContent() {
   for (const template of templates.templates || []) {
     if (await getOne('meta', `deleted_template:${template.id}`)) continue;
     const existing = await getOne('templates', template.id);
-    // Monthly-focus templates are managed bundled content. Refresh them so a link or
-    // timing correction reaches phones that received an earlier version. User-created
-    // templates and the older R0546 starter are never overwritten.
-    if (!existing || template.status === 'monthly focus') await putOne('templates', template);
+    // Seeded templates are managed bundled content. Refresh them so a link or timing
+    // correction reaches phones that received an earlier version. User-created
+    // templates are never overwritten, and deletion tombstones above still win.
+    if (!existing || template.status !== 'user') await putOne('templates', template);
   }
 
   await putOne('meta', { key: 'bundled_content_version', value: BUNDLED_CONTENT_VERSION });
