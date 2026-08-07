@@ -82,6 +82,20 @@ async function renderHome() {
     main.addEventListener('click', () => openTemplate(template));
 
     card.appendChild(main);
+    const actions = document.createElement('div');
+    actions.className = 'template-actions';
+
+    if (template.videoUrl) {
+      const video = document.createElement('a');
+      video.className = 'template-video';
+      video.href = template.videoUrl;
+      video.target = '_blank';
+      video.rel = 'noopener noreferrer';
+      video.setAttribute('aria-label', `Watch ${template.name} video`);
+      video.textContent = '▶ Video';
+      actions.appendChild(video);
+    }
+
     // AUDIT.md F3: the seeded R0546 template is partly guessed and its steps total
     // 6 minutes, not 15. Say so where it is used rather than only in the docs.
     if (template.status && template.status !== 'user') {
@@ -89,8 +103,9 @@ async function renderHome() {
       badge.className = template.status === 'starter' ? 'badge badge-warn' : 'badge';
       badge.textContent = template.status === 'starter' ? 'unverified' : template.status;
       badge.title = 'Seeded from R0546; exercise list not yet confirmed against the video.';
-      card.appendChild(badge);
+      actions.appendChild(badge);
     }
+    if (actions.childElementCount) card.appendChild(actions);
     templateList.appendChild(card);
   }
 

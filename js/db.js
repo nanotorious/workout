@@ -5,7 +5,7 @@
 
 const DB_NAME = 'workoutApp';
 const DB_VERSION = 1;
-const BUNDLED_CONTENT_VERSION = 2;
+const BUNDLED_CONTENT_VERSION = 3;
 const SEED_CATALOG_URL = 'data/exercise_catalog.json';
 const SEED_TEMPLATES_URL = 'data/workout_templates.json';
 
@@ -177,6 +177,7 @@ function templateFromStored(stored) {
     id: stored.id,
     name: stored.name,
     sourceRef: stored.source_ref || null,
+    videoUrl: stored.video_url || null,
     status: stored.status || 'user',
     composerMode: stored.composer_mode || 'timeline',
     pattern: stored.pattern || null,
@@ -191,6 +192,7 @@ function templateToStored(template) {
     id: template.id,
     name: template.name,
     source_ref: template.sourceRef || null,
+    video_url: template.videoUrl || null,
     status: template.status || 'user',
     composer_mode: template.composerMode || 'timeline',
     pattern: template.pattern || null,
@@ -302,7 +304,11 @@ async function syncBundledContent() {
 
   const templates = await fetchJson(SEED_TEMPLATES_URL);
   for (const template of templates.templates || []) {
-    if (!await getOne('templates', template.id)) await putOne('templates', template);
+    const existing = await getOne('templates', template.id);
+    // Monthly-focus templates are managed bundled content. Refresh them so a link or
+    // timing correction reaches phones that received an earlier version. User-created
+    // templates and the older R0546 starter are never overwritten.
+    if (!existing || template.status === 'monthly focus') await putOne('templates', template);
   }
 
   await putOne('meta', { key: 'bundled_content_version', value: BUNDLED_CONTENT_VERSION });
