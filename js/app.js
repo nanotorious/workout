@@ -5,6 +5,7 @@ import * as catalog from './catalog.js';
 import * as picker from './ui/picker.js';
 import * as stepEditor from './ui/stepEditor.js';
 import * as dialog from './ui/dialog.js';
+import { DEMO_LABELS, getExerciseGuide, hasSpecificExerciseGuide } from './exerciseGuides.js';
 import { Player } from './player.js';
 import { compilePrimaryAnchorRest, compileTemplate } from './pattern.js';
 import {
@@ -26,6 +27,7 @@ const state = {
 };
 
 let player = null;
+let exerciseGuideReturnFocus = null;
 
 const MOTIVATION_QUOTES = [
   'Show up. Build momentum.',
@@ -449,6 +451,57 @@ function exerciseMatches(exercise, query) {
   return searchable.includes(query.toLowerCase());
 }
 
+function movementDemoMarkup(kind) {
+  const label = DEMO_LABELS[kind];
+  if (!label) return '';
+  return `<div class="movement-demo-stage" data-movement="${kind}">
+    <svg viewBox="0 0 320 190" role="img" aria-label="${label}">
+      <path class="movement-ground" d="M28 164H292" />
+      <path class="movement-path" d="M70 133 Q160 44 250 133" />
+      <g class="movement-figure">
+        <circle class="movement-head" cx="160" cy="48" r="13" />
+        <path class="movement-torso" d="M160 63V111" />
+        <path class="movement-arm movement-arm-a" d="M160 75L126 101" />
+        <path class="movement-arm movement-arm-b" d="M160 75L194 101" />
+        <path class="movement-leg movement-leg-a" d="M160 110L139 157" />
+        <path class="movement-leg movement-leg-b" d="M160 110L181 157" />
+        <circle class="movement-weight" cx="126" cy="105" r="8" />
+      </g>
+      <path class="movement-arrow" d="M235 80c18 11 20 31 8 46" />
+      <path class="movement-arrow-tip" d="m236 121 7 7 8-5" />
+    </svg>
+    <span>Movement cue · loops automatically</span>
+  </div>`;
+}
+
+function openExerciseGuide(exercise) {
+  exerciseGuideReturnFocus = document.activeElement;
+  const guide = getExerciseGuide(exercise);
+  const category = EXERCISE_CATEGORY_LABELS.get(exercise.category)
+    || (exercise.category || 'custom').replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+
+  $('exercise-guide-category').textContent = category;
+  $('exercise-guide-title').textContent = exercise.name;
+  $('exercise-guide-meta').innerHTML = `<span>${escapeHtml(exerciseDetail(exercise))}</span>
+    ${hasSpecificExerciseGuide(exercise.id) ? '' : '<span>General guide</span>'}`;
+  $('exercise-guide-steps').innerHTML = [guide.setup, guide.move]
+    .map((step) => `<li>${escapeHtml(step)}</li>`).join('');
+  $('exercise-guide-cue').innerHTML = `<strong>Keep in mind</strong><span>${escapeHtml(guide.cue)}</span>`;
+
+  const demo = $('exercise-guide-demo');
+  demo.innerHTML = guide.demo ? movementDemoMarkup(guide.demo) : '';
+  demo.classList.toggle('hidden', !guide.demo);
+  $('exercise-guide-sheet').classList.remove('hidden');
+  $('exercise-guide-close').focus();
+}
+
+function closeExerciseGuide() {
+  $('exercise-guide-sheet').classList.add('hidden');
+  $('exercise-guide-demo').innerHTML = '';
+  if (exerciseGuideReturnFocus?.isConnected) exerciseGuideReturnFocus.focus();
+  exerciseGuideReturnFocus = null;
+}
+
 function renderExerciseLibrary() {
   const query = $('exercise-search').value.trim();
   const allExercises = catalog.all();
@@ -492,11 +545,14 @@ function renderExerciseLibrary() {
     const list = document.createElement('div');
     list.className = 'exercise-list';
     for (const exercise of exercises) {
-      const item = document.createElement('div');
+      const item = document.createElement('button');
+      item.type = 'button';
       item.className = 'exercise-library-item';
       item.innerHTML = `<span class="exercise-library-name">${escapeHtml(exercise.name)}</span>
         <span class="exercise-library-detail">${escapeHtml(exerciseDetail(exercise))}</span>
-        ${exercise.isFavourite ? '<span class="exercise-library-favourite" aria-label="Favourite">★</span>' : ''}`;
+        <span class="exercise-library-open">${exercise.isFavourite ? '<span class="exercise-library-favourite" aria-label="Favourite">★</span>' : ''}<span aria-hidden="true">→</span></span>`;
+      item.setAttribute('aria-label', `View guide for ${exercise.name}`);
+      item.addEventListener('click', () => openExerciseGuide(exercise));
       list.appendChild(item);
     }
     section.appendChild(list);
@@ -946,6 +1002,16 @@ $('home-exercises').addEventListener('click', () => {
 });
 
 $('exercise-search').addEventListener('input', renderExerciseLibrary);
+
+$('exercise-guide-close').addEventListener('click', closeExerciseGuide);
+$('exercise-guide-sheet').addEventListener('click', (event) => {
+  if (event.target === $('exercise-guide-sheet')) closeExerciseGuide();
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !$('exercise-guide-sheet').classList.contains('hidden')) {
+    closeExerciseGuide();
+  }
+});
 
 $('hidden-items-trigger').addEventListener('click', openHiddenItems);
 $('hidden-items-close').addEventListener('click', closeHiddenItems);
