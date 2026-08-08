@@ -42,6 +42,16 @@ const MOTIVATION_QUOTES = [
   'Progress follows practice.'
 ];
 
+const EXERCISE_CATEGORIES = [
+  ['strength_upper', 'Upper body'],
+  ['strength_lower', 'Lower body'],
+  ['cardio_conditioning', 'Conditioning'],
+  ['core_prehab', 'Core & prehab'],
+  ['custom', 'Custom']
+];
+
+const EXERCISE_CATEGORY_LABELS = new Map(EXERCISE_CATEGORIES);
+
 function renderMotivation() {
   let previous = -1;
   try { previous = Number(localStorage.getItem('workout.lastMotivation')); } catch {}
@@ -151,6 +161,79 @@ async function renderHome() {
         · ${session.completedStepIds.length}/${session.workout.steps.length} steps</span>
       </div>`;
     sessionList.appendChild(card);
+  }
+}
+
+function exerciseDetail(exercise) {
+  const target = exercise.defaultTarget || { mode: 'duration', seconds: 30 };
+  const targetText = target.mode === 'reps' ? `${target.reps} reps` : `${target.seconds}s`;
+  const equipment = (exercise.equipment || []).join(' · ');
+  return equipment ? `${targetText} · ${equipment}` : targetText;
+}
+
+function exerciseMatches(exercise, query) {
+  if (!query) return true;
+  const searchable = [
+    exercise.name,
+    ...(exercise.aliases || []),
+    ...(exercise.equipment || []),
+    EXERCISE_CATEGORY_LABELS.get(exercise.category) || exercise.category
+  ].join(' ').toLowerCase();
+  return searchable.includes(query.toLowerCase());
+}
+
+function renderExerciseLibrary() {
+  const query = $('exercise-search').value.trim();
+  const allExercises = catalog.all();
+  const visible = allExercises
+    .filter((exercise) => exerciseMatches(exercise, query))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  $('exercise-total').textContent = query
+    ? `${visible.length} / ${allExercises.length}`
+    : `${allExercises.length} total`;
+
+  const library = $('exercise-library');
+  library.innerHTML = '';
+
+  if (!visible.length) {
+    library.innerHTML = `<p class="empty">No exercises match “${escapeHtml(query)}”.</p>`;
+    return;
+  }
+
+  const categoryOrder = new Map(EXERCISE_CATEGORIES.map(([key], index) => [key, index]));
+  const grouped = new Map();
+  for (const exercise of visible) {
+    const category = exercise.category || 'custom';
+    if (!grouped.has(category)) grouped.set(category, []);
+    grouped.get(category).push(exercise);
+  }
+
+  const categories = [...grouped.entries()].sort(([categoryA], [categoryB]) => {
+    const rankA = categoryOrder.get(categoryA) ?? EXERCISE_CATEGORIES.length;
+    const rankB = categoryOrder.get(categoryB) ?? EXERCISE_CATEGORIES.length;
+    return rankA - rankB || categoryA.localeCompare(categoryB);
+  });
+
+  for (const [category, exercises] of categories) {
+    const section = document.createElement('section');
+    section.className = 'exercise-group';
+    const label = EXERCISE_CATEGORY_LABELS.get(category)
+      || category.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+    section.innerHTML = `<h2><span>${escapeHtml(label)}</span><span>${exercises.length}</span></h2>`;
+
+    const list = document.createElement('div');
+    list.className = 'exercise-list';
+    for (const exercise of exercises) {
+      const item = document.createElement('div');
+      item.className = 'exercise-library-item';
+      item.innerHTML = `<span class="exercise-library-name">${escapeHtml(exercise.name)}</span>
+        <span class="exercise-library-detail">${escapeHtml(exerciseDetail(exercise))}</span>
+        ${exercise.isFavourite ? '<span class="exercise-library-favourite" aria-label="Favourite">★</span>' : ''}`;
+      list.appendChild(item);
+    }
+    section.appendChild(list);
+    library.appendChild(section);
   }
 }
 
@@ -588,6 +671,14 @@ $('go-pattern').addEventListener('click', () => {
   renderPattern();
   showView('pattern');
 });
+
+$('home-exercises').addEventListener('click', () => {
+  $('exercise-search').value = '';
+  renderExerciseLibrary();
+  showView('exercises');
+});
+
+$('exercise-search').addEventListener('input', renderExerciseLibrary);
 
 $('resume-continue').addEventListener('click', async () => {
   const draft = await db.getDraft();

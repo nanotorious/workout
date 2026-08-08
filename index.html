@@ -20,6 +20,7 @@
       <span class="brand-mark" aria-hidden="true">NW</span>
     </div>
     <div class="header-tools">
+      <button class="link-btn utility-btn" id="home-exercises" type="button">Exercises</button>
       <button class="link-btn utility-btn" id="home-help" type="button">Help</button>
       <button class="link-btn utility-btn" id="home-import" type="button" title="Restore from a workout backup">Restore</button>
       <button class="link-btn utility-btn" id="home-export" type="button" title="Save a workout backup to iCloud Drive">Backup</button>
@@ -64,6 +65,22 @@
 
   <h2 class="section-title"><span>Recent sessions</span><span>03</span></h2>
   <div id="session-list" class="card-list"></div>
+</section>
+
+<!-- Exercise library -->
+<section class="view hidden" id="view-exercises" data-view="exercises">
+  <header class="app-header exercise-library-header">
+    <button class="link-btn" data-back="home" type="button">Back</button>
+    <h1>Exercises</h1>
+    <span class="exercise-total" id="exercise-total">—</span>
+  </header>
+
+  <div class="exercise-search">
+    <input type="search" id="exercise-search" placeholder="Search all exercises"
+           aria-label="Search all exercises" autocomplete="off">
+  </div>
+
+  <div class="exercise-library" id="exercise-library"></div>
 </section>
 
 <!-- Compose -->
