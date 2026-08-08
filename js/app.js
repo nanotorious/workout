@@ -85,10 +85,164 @@ const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (char) => (
 
 // --- Home --------------------------------------------------------------------
 
+const SWIPE_ACTION_WIDTH = 156;
+let openSwipeRow = null;
+
+function setSwipeOpen(row, open) {
+  if (openSwipeRow && openSwipeRow !== row) setSwipeOpen(openSwipeRow, false);
+  row.classList.toggle('is-open', open);
+  row.querySelector('.swipe-card')?.style.removeProperty('transform');
+  const more = row.querySelector('.swipe-more');
+  if (more) more.setAttribute('aria-expanded', String(open));
+  for (const action of row.querySelectorAll('.swipe-action')) {
+    action.tabIndex = open ? 0 : -1;
+  }
+  openSwipeRow = open ? row : (openSwipeRow === row ? null : openSwipeRow);
+}
+
+function makeSwipeRow(card, label, onHide, onDelete) {
+  const row = document.createElement('div');
+  row.className = 'swipe-row';
+
+  const actions = document.createElement('div');
+  actions.className = 'swipe-actions';
+  actions.setAttribute('aria-label', `${label} actions`);
+  actions.innerHTML = `<button class="swipe-action swipe-hide" type="button" tabindex="-1">Hide</button>
+    <button class="swipe-action swipe-delete" type="button" tabindex="-1">Delete</button>`;
+
+  card.classList.add('swipe-card');
+  const more = document.createElement('button');
+  more.type = 'button';
+  more.className = 'swipe-more';
+  more.textContent = '•••';
+  more.setAttribute('aria-label', `Actions for ${label}`);
+  more.setAttribute('aria-expanded', 'false');
+  card.appendChild(more);
+  row.append(actions, card);
+
+  more.addEventListener('click', (event) => {
+    event.stopPropagation();
+    setSwipeOpen(row, !row.classList.contains('is-open'));
+  });
+
+  actions.querySelector('.swipe-hide').addEventListener('click', async () => {
+    setSwipeOpen(row, false);
+    await onHide();
+  });
+  actions.querySelector('.swipe-delete').addEventListener('click', async () => {
+    setSwipeOpen(row, false);
+    await onDelete();
+  });
+
+  let tracking = false;
+  let horizontal = null;
+  let startX = 0;
+  let startY = 0;
+  let startOffset = 0;
+  let currentOffset = 0;
+  let suppressClick = false;
+  let activePointerId = null;
+
+  card.addEventListener('pointerdown', (event) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    tracking = true;
+    horizontal = null;
+    startX = event.clientX;
+    startY = event.clientY;
+    startOffset = row.classList.contains('is-open') ? -SWIPE_ACTION_WIDTH : 0;
+    currentOffset = startOffset;
+    activePointerId = event.pointerId;
+  });
+
+  card.addEventListener('pointermove', (event) => {
+    if (!tracking) return;
+    const deltaX = event.clientX - startX;
+    const deltaY = event.clientY - startY;
+    if (horizontal === null && Math.max(Math.abs(deltaX), Math.abs(deltaY)) > 8) {
+      horizontal = Math.abs(deltaX) > Math.abs(deltaY) * 1.15;
+      if (horizontal) card.setPointerCapture?.(activePointerId);
+    }
+    if (!horizontal) return;
+    event.preventDefault();
+    card.classList.add('is-dragging');
+    currentOffset = Math.max(-SWIPE_ACTION_WIDTH, Math.min(0, startOffset + deltaX));
+    card.style.transform = `translateX(${currentOffset}px)`;
+  });
+
+  const finishSwipe = () => {
+    if (!tracking) return;
+    tracking = false;
+    card.classList.remove('is-dragging');
+    if (horizontal) {
+      suppressClick = true;
+      setSwipeOpen(row, currentOffset < -(SWIPE_ACTION_WIDTH * 0.42));
+      setTimeout(() => { suppressClick = false; }, 0);
+    }
+    horizontal = null;
+    activePointerId = null;
+  };
+  card.addEventListener('pointerup', finishSwipe);
+  card.addEventListener('pointercancel', finishSwipe);
+
+  card.addEventListener('click', (event) => {
+    if (event.target.closest('.swipe-more')) return;
+    if (suppressClick) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    if (row.classList.contains('is-open')) {
+      event.preventDefault();
+      event.stopPropagation();
+      setSwipeOpen(row, false);
+    }
+  }, true);
+
+  return row;
+}
+
+document.addEventListener('pointerdown', (event) => {
+  if (openSwipeRow && !openSwipeRow.contains(event.target)) setSwipeOpen(openSwipeRow, false);
+}, true);
+
+function sessionWhen(session) {
+  return new Date(session.finishedAt).toLocaleString('en-GB',
+    { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+async function confirmDeleteTemplate(template) {
+  const confirmed = await dialog.confirm(
+    `Delete “${template.name}”?`,
+    'This removes the template. Workout history is unchanged, and Backup will remember the deletion.',
+    'Delete'
+  );
+  if (!confirmed) return;
+  await db.deleteTemplate(template.id);
+  toast('Template deleted');
+  await renderHome();
+}
+
+async function confirmDeleteSession(session) {
+  const name = session.workout.name || 'Untitled workout';
+  const confirmed = await dialog.confirm(
+    `Delete “${name}”?`,
+    'This permanently removes the session from workout history. Backup will remember the deletion.',
+    'Delete'
+  );
+  if (!confirmed) return;
+  await db.deleteSession(session.id);
+  toast('Session deleted');
+  await renderHome();
+}
+
 async function renderHome() {
-  const [templates, sessions, draft] = await Promise.all([
+  const [allTemplates, allSessions, draft] = await Promise.all([
     db.listTemplates(), db.listSessions(), db.getDraft()
   ]);
+  const templates = allTemplates.filter((template) => !template.isHidden);
+  const sessions = allSessions.filter((session) => !session.isHidden);
+  const hiddenCount = (allTemplates.length - templates.length) + (allSessions.length - sessions.length);
+  if (openSwipeRow) setSwipeOpen(openSwipeRow, false);
 
   const banner = $('resume-banner');
   if (draft && draft.status !== 'abandoned' && draft.workout?.steps?.length) {
@@ -142,7 +296,16 @@ async function renderHome() {
       actions.appendChild(badge);
     }
     if (actions.childElementCount) card.appendChild(actions);
-    templateList.appendChild(card);
+    templateList.appendChild(makeSwipeRow(
+      card,
+      template.name,
+      async () => {
+        await db.setTemplateHidden(template.id, true);
+        toast('Template hidden');
+        await renderHome();
+      },
+      () => confirmDeleteTemplate(template)
+    ));
   }
 
   const sessionList = $('session-list');
@@ -153,15 +316,119 @@ async function renderHome() {
   for (const session of sessions.slice(0, 8)) {
     const card = document.createElement('div');
     card.className = 'card';
-    const when = new Date(session.finishedAt).toLocaleString('en-GB',
-      { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    const when = sessionWhen(session);
     card.innerHTML = `<div class="card-main">
         <span class="card-title">${escapeHtml(session.workout.name || 'Untitled workout')}</span>
         <span class="card-sub">${when} · ${formatDuration(session.actualDurationSeconds || 0)}
         · ${session.completedStepIds.length}/${session.workout.steps.length} steps</span>
       </div>`;
-    sessionList.appendChild(card);
+    sessionList.appendChild(makeSwipeRow(
+      card,
+      session.workout.name || 'Untitled workout',
+      async () => {
+        await db.setSessionHidden(session.id, true);
+        toast('Session hidden');
+        await renderHome();
+      },
+      () => confirmDeleteSession(session)
+    ));
   }
+
+  $('hidden-items-count').textContent = String(hiddenCount);
+  $('hidden-items-trigger').classList.toggle('hidden', hiddenCount === 0);
+}
+
+function hiddenItemRow(title, detail, onRestore, onDelete) {
+  const row = document.createElement('div');
+  row.className = 'hidden-item';
+  row.innerHTML = `<div class="hidden-item-copy">
+      <strong>${escapeHtml(title)}</strong>
+      <span>${escapeHtml(detail)}</span>
+    </div>`;
+
+  const actions = document.createElement('div');
+  actions.className = 'hidden-item-actions';
+  const restore = document.createElement('button');
+  restore.type = 'button';
+  restore.className = 'btn btn-quiet';
+  restore.textContent = 'Restore';
+  restore.addEventListener('click', onRestore);
+  const remove = document.createElement('button');
+  remove.type = 'button';
+  remove.className = 'btn btn-danger';
+  remove.textContent = 'Delete';
+  remove.addEventListener('click', onDelete);
+  actions.append(restore, remove);
+  row.appendChild(actions);
+  return row;
+}
+
+async function renderHiddenItems() {
+  const [templates, sessions] = await Promise.all([db.listTemplates(), db.listSessions()]);
+  const hiddenTemplates = templates.filter((template) => template.isHidden);
+  const hiddenSessions = sessions.filter((session) => session.isHidden);
+  const list = $('hidden-items-list');
+  list.innerHTML = '';
+
+  if (!hiddenTemplates.length && !hiddenSessions.length) {
+    list.innerHTML = '<p class="empty">Nothing is hidden.</p>';
+    return;
+  }
+
+  const appendHeading = (label, count) => {
+    const heading = document.createElement('p');
+    heading.className = 'picker-group';
+    heading.textContent = `${label} · ${count}`;
+    list.appendChild(heading);
+  };
+
+  if (hiddenTemplates.length) {
+    appendHeading('Templates', hiddenTemplates.length);
+    for (const template of hiddenTemplates) {
+      const steps = compileTemplate(template, catalog.byId());
+      list.appendChild(hiddenItemRow(
+        template.name,
+        `${steps.length} steps · ${describeDuration(steps)}`,
+        async () => {
+          await db.setTemplateHidden(template.id, false);
+          await Promise.all([renderHome(), renderHiddenItems()]);
+          toast('Template restored');
+        },
+        async () => {
+          await confirmDeleteTemplate(template);
+          await renderHiddenItems();
+        }
+      ));
+    }
+  }
+
+  if (hiddenSessions.length) {
+    appendHeading('Recent sessions', hiddenSessions.length);
+    for (const session of hiddenSessions) {
+      list.appendChild(hiddenItemRow(
+        session.workout.name || 'Untitled workout',
+        `${sessionWhen(session)} · ${formatDuration(session.actualDurationSeconds || 0)}`,
+        async () => {
+          await db.setSessionHidden(session.id, false);
+          await Promise.all([renderHome(), renderHiddenItems()]);
+          toast('Session restored');
+        },
+        async () => {
+          await confirmDeleteSession(session);
+          await renderHiddenItems();
+        }
+      ));
+    }
+  }
+}
+
+async function openHiddenItems() {
+  await renderHiddenItems();
+  $('hidden-items-sheet').classList.remove('hidden');
+}
+
+function closeHiddenItems() {
+  $('hidden-items-sheet').classList.add('hidden');
 }
 
 function exerciseDetail(exercise) {
@@ -680,6 +947,12 @@ $('home-exercises').addEventListener('click', () => {
 
 $('exercise-search').addEventListener('input', renderExerciseLibrary);
 
+$('hidden-items-trigger').addEventListener('click', openHiddenItems);
+$('hidden-items-close').addEventListener('click', closeHiddenItems);
+$('hidden-items-sheet').addEventListener('click', (event) => {
+  if (event.target === $('hidden-items-sheet')) closeHiddenItems();
+});
+
 $('resume-continue').addEventListener('click', async () => {
   const draft = await db.getDraft();
   if (!draft) return;
@@ -696,7 +969,7 @@ $('resume-discard').addEventListener('click', async () => {
 
 $('home-help').addEventListener('click', () => dialog.alert(
   'iCloud handoff',
-  '1. On this device, tap Backup.\n2. Save workout-sync.json in iCloud Drive → Workout App Sync.\n3. On the other device, tap Restore and choose that file.\n4. Tap Backup again when you finish.\n\nOn iPhone, choose Save to Files first. Use one device at a time. This is manual, not automatic sync.',
+  '1. On this device, tap Backup.\n2. Save workout-sync.json in iCloud Drive → Workout App Sync.\n3. On the other device, tap Restore and choose that file.\n4. Tap Backup again when you finish.\n\nBackup includes hidden and deleted templates/sessions. On iPhone, choose Save to Files first. Use one device at a time. This is manual, not automatic sync.',
   'Got it'
 ));
 
@@ -750,7 +1023,8 @@ $('import-file').addEventListener('change', async (event) => {
     const counts = await db.importAll(payload);
     await catalog.load();
     await renderHome();
-    toast(`Restored ${counts.sessions} sessions, ${counts.templates} templates`);
+    const deletions = counts.deletedTemplates + counts.deletedSessions;
+    toast(`Restored ${counts.sessions} sessions, ${counts.templates} templates${deletions ? ` · ${deletions} deletions` : ''}`);
   } catch (err) {
     toast(`Import failed: ${err.message}`);
   } finally {

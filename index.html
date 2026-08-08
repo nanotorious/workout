@@ -65,6 +65,10 @@
 
   <h2 class="section-title"><span>Recent sessions</span><span>03</span></h2>
   <div id="session-list" class="card-list"></div>
+
+  <button class="hidden-items-trigger hidden" id="hidden-items-trigger" type="button">
+    <span>Hidden items</span><span id="hidden-items-count">0</span>
+  </button>
 </section>
 
 <!-- Exercise library -->
@@ -224,6 +228,17 @@
     <button class="btn btn-quiet btn-large" id="finish-discard" type="button">Discard</button>
   </div>
 </section>
+
+<!-- Hidden items -->
+<div class="sheet hidden" id="hidden-items-sheet">
+  <div class="sheet-panel">
+    <header class="sheet-header">
+      <strong>Hidden items</strong>
+      <button class="link-btn sheet-close" id="hidden-items-close" type="button">Close</button>
+    </header>
+    <div class="sheet-body" id="hidden-items-list"></div>
+  </div>
+</div>
 
 <!-- Exercise picker -->
 <div class="sheet hidden" id="picker">

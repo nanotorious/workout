@@ -191,7 +191,8 @@ function templateFromStored(stored) {
     pattern: stored.pattern || null,
     steps: (stored.steps || []).map(stepFromStored),
     estimatedDurationSeconds: stored.estimated_duration_seconds ?? null,
-    createdAt: stored.created_at || null
+    createdAt: stored.created_at || null,
+    isHidden: Boolean(stored.is_hidden)
   };
 }
 
@@ -206,7 +207,8 @@ function templateToStored(template) {
     pattern: template.pattern || null,
     steps: (template.steps || []).map(stepToStored),
     estimated_duration_seconds: template.estimatedDurationSeconds ?? null,
-    created_at: template.createdAt || null
+    created_at: template.createdAt || null,
+    is_hidden: Boolean(template.isHidden)
   };
 }
 
@@ -219,7 +221,8 @@ function sessionFromStored(stored) {
     completedStepIds: stored.completed_step_ids || [],
     skippedStepIds: stored.skipped_step_ids || [],
     actualDurationSeconds: stored.actual_duration_seconds ?? null,
-    note: stored.note || null
+    note: stored.note || null,
+    isHidden: Boolean(stored.is_hidden)
   };
 }
 
@@ -232,7 +235,8 @@ function sessionToStored(session) {
     completed_step_ids: session.completedStepIds || [],
     skipped_step_ids: session.skippedStepIds || [],
     actual_duration_seconds: session.actualDurationSeconds ?? null,
-    note: session.note || null
+    note: session.note || null,
+    is_hidden: Boolean(session.isHidden)
   };
 }
 
@@ -317,7 +321,9 @@ async function syncBundledContent() {
     // Seeded templates are managed bundled content. Refresh them so a link or timing
     // correction reaches phones that received an earlier version. User-created
     // templates are never overwritten, and deletion tombstones above still win.
-    if (!existing || template.status !== 'user') await putOne('templates', template);
+    if (!existing || template.status !== 'user') {
+      await putOne('templates', { ...template, is_hidden: Boolean(existing?.is_hidden) });
+    }
   }
 
   await putOne('meta', { key: 'bundled_content_version', value: BUNDLED_CONTENT_VERSION });
@@ -363,6 +369,13 @@ export async function deleteTemplate(id) {
   await putOne('meta', { key: `deleted_template:${id}`, value: true });
 }
 
+export async function setTemplateHidden(id, hidden) {
+  const row = await getOne('templates', id);
+  if (!row) return false;
+  await putOne('templates', { ...row, is_hidden: Boolean(hidden) });
+  return true;
+}
+
 export async function getDraft() {
   const row = await getOne('drafts', DRAFT_KEY);
   return draftFromStored(row);
@@ -383,7 +396,20 @@ export async function listSessions() {
 
 export async function saveSession(session) {
   await putOne('sessions', sessionToStored(session));
+  await deleteOne('meta', `deleted_session:${session.id}`);
   return session;
+}
+
+export async function deleteSession(id) {
+  await deleteOne('sessions', id);
+  await putOne('meta', { key: `deleted_session:${id}`, value: true });
+}
+
+export async function setSessionHidden(id, hidden) {
+  const row = await getOne('sessions', id);
+  if (!row) return false;
+  await putOne('sessions', { ...row, is_hidden: Boolean(hidden) });
+  return true;
 }
 
 // Export writes the stored shape verbatim, so an export file is directly comparable
@@ -401,6 +427,11 @@ export async function exportAll() {
     deleted_template_ids: meta
       .filter((row) => row.key.startsWith('deleted_template:') && row.value)
       .map((row) => row.key.slice('deleted_template:'.length))
+      .sort(),
+    deleted_session_ids: meta
+      .filter((row) => row.key.startsWith('deleted_session:') && row.value)
+      .map((row) => row.key.slice('deleted_session:'.length))
+      .sort()
   };
 }
 
@@ -418,13 +449,22 @@ export function validateImport(payload) {
   if (payload.deleted_template_ids !== undefined && !Array.isArray(payload.deleted_template_ids)) {
     throw new Error('deleted_template_ids must be a list');
   }
+  if (payload.deleted_session_ids !== undefined && !Array.isArray(payload.deleted_session_ids)) {
+    throw new Error('deleted_session_ids must be a list');
+  }
   return true;
 }
 
 export async function importAll(payload) {
   validateImport(payload);
 
-  const counts = { exercises: 0, templates: 0, sessions: 0, deletedTemplates: 0 };
+  const counts = {
+    exercises: 0,
+    templates: 0,
+    sessions: 0,
+    deletedTemplates: 0,
+    deletedSessions: 0
+  };
   // Merge rather than replace: importing an old backup must not delete newer sessions.
   // Matching ids are overwritten, which makes a repeated import idempotent.
   for (const store of ['exercises', 'templates', 'sessions']) {
@@ -432,6 +472,7 @@ export async function importAll(payload) {
       if (!row?.id) continue;
       await putOne(store, row);
       if (store === 'templates') await deleteOne('meta', `deleted_template:${row.id}`);
+      if (store === 'sessions') await deleteOne('meta', `deleted_session:${row.id}`);
       counts[store] += 1;
     }
   }
@@ -440,6 +481,12 @@ export async function importAll(payload) {
     await deleteOne('templates', id);
     await putOne('meta', { key: `deleted_template:${id}`, value: true });
     counts.deletedTemplates += 1;
+  }
+  for (const id of payload.deleted_session_ids || []) {
+    if (typeof id !== 'string' || !id) continue;
+    await deleteOne('sessions', id);
+    await putOne('meta', { key: `deleted_session:${id}`, value: true });
+    counts.deletedSessions += 1;
   }
   await putOne('meta', { key: 'seeded_at', value: new Date().toISOString() });
   return counts;
