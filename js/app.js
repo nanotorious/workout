@@ -6,6 +6,11 @@ import * as picker from './ui/picker.js';
 import * as stepEditor from './ui/stepEditor.js';
 import * as dialog from './ui/dialog.js';
 import { DEMO_LABELS, getExerciseGuide, hasSpecificExerciseGuide } from './exerciseGuides.js';
+import { getMovementAsset } from './movementAssets.js';
+import {
+  EXERCISE_CATEGORIES, EXERCISE_CATEGORY_LABELS, equipmentFilterOptions,
+  exerciseMatchesFilters, formatFilterLabel
+} from './exerciseFilters.js';
 import { Player } from './player.js';
 import { compilePrimaryAnchorRest, compileTemplate } from './pattern.js';
 import {
@@ -28,6 +33,14 @@ const state = {
 
 let player = null;
 let exerciseGuideReturnFocus = null;
+// Lottie animations keep a rAF loop alive until destroyed, so the sheet must tear its
+// animation down on close — the player's timing accuracy is the thing being protected.
+let activeMovementAnim = null;
+let activeMovementToken = null;
+const exerciseLibraryFilters = {
+  categories: new Set(),
+  equipment: new Set()
+};
 
 const MOTIVATION_QUOTES = [
   'Show up. Build momentum.',
@@ -43,16 +56,6 @@ const MOTIVATION_QUOTES = [
   'Your future strength starts here.',
   'Progress follows practice.'
 ];
-
-const EXERCISE_CATEGORIES = [
-  ['strength_upper', 'Upper body'],
-  ['strength_lower', 'Lower body'],
-  ['cardio_conditioning', 'Conditioning'],
-  ['core_prehab', 'Core & prehab'],
-  ['custom', 'Custom']
-];
-
-const EXERCISE_CATEGORY_LABELS = new Map(EXERCISE_CATEGORIES);
 
 function renderMotivation() {
   let previous = -1;
@@ -440,15 +443,48 @@ function exerciseDetail(exercise) {
   return equipment ? `${targetText} · ${equipment}` : targetText;
 }
 
-function exerciseMatches(exercise, query) {
-  if (!query) return true;
-  const searchable = [
-    exercise.name,
-    ...(exercise.aliases || []),
-    ...(exercise.equipment || []),
-    EXERCISE_CATEGORY_LABELS.get(exercise.category) || exercise.category
-  ].join(' ').toLowerCase();
-  return searchable.includes(query.toLowerCase());
+function exerciseFilterButton(value, label, facet) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'exercise-filter-chip';
+  button.textContent = label;
+  button.dataset.facet = facet;
+  button.dataset.value = value;
+  button.setAttribute('aria-pressed', String(exerciseLibraryFilters[facet].has(value)));
+  button.addEventListener('click', () => {
+    const selected = exerciseLibraryFilters[facet];
+    if (selected.has(value)) selected.delete(value);
+    else selected.add(value);
+    renderExerciseFilters();
+    renderExerciseLibrary();
+  });
+  return button;
+}
+
+function renderExerciseFilters() {
+  const categoryFilters = $('exercise-category-filters');
+  categoryFilters.innerHTML = '';
+  for (const [value, label] of EXERCISE_CATEGORIES) {
+    categoryFilters.appendChild(exerciseFilterButton(value, label, 'categories'));
+  }
+
+  const equipmentFilters = $('exercise-equipment-filters');
+  equipmentFilters.innerHTML = '';
+  const equipment = equipmentFilterOptions(catalog.all());
+  for (const value of equipment) {
+    equipmentFilters.appendChild(exerciseFilterButton(value, formatFilterLabel(value), 'equipment'));
+  }
+  $('exercise-equipment-filter-row').classList.toggle('hidden', !equipment.length);
+
+  const activeCount = exerciseLibraryFilters.categories.size + exerciseLibraryFilters.equipment.size;
+  $('exercise-filters-clear').disabled = activeCount === 0;
+  $('exercise-filters-clear').textContent = activeCount ? `Clear ${activeCount}` : 'Clear';
+}
+
+function resetExerciseFilters() {
+  exerciseLibraryFilters.categories.clear();
+  exerciseLibraryFilters.equipment.clear();
+  renderExerciseFilters();
 }
 
 function movementDemoMarkup(kind) {
@@ -489,14 +525,81 @@ function openExerciseGuide(exercise) {
   $('exercise-guide-cue').innerHTML = `<strong>Keep in mind</strong><span>${escapeHtml(guide.cue)}</span>`;
 
   const demo = $('exercise-guide-demo');
+  const asset = getMovementAsset(exercise.id);
+
+  // Cue first, always. If a Lottie asset exists it replaces the cue once it has actually
+  // loaded, so a missing or unreachable animation degrades to the cue rather than a hole.
   demo.innerHTML = guide.demo ? movementDemoMarkup(guide.demo) : '';
-  demo.classList.toggle('hidden', !guide.demo);
+  demo.classList.toggle('hidden', !guide.demo && !asset);
+  if (asset) playMovementAsset(demo, asset);
+
   $('exercise-guide-sheet').classList.remove('hidden');
   $('exercise-guide-close').focus();
 }
 
+// Render a Lottie animation into `host`, replacing whatever cue is already there.
+// Loads the runtime on first use so app start is unaffected.
+async function playMovementAsset(host, asset) {
+  const token = Symbol('movement-asset');
+  activeMovementToken = token;
+  try {
+    const lottie = await loadLottieRuntime();
+    // The sheet may have been closed, or another exercise opened, while we were loading.
+    if (activeMovementToken !== token || !host.isConnected) return;
+
+    const stage = document.createElement('div');
+    stage.className = 'movement-demo-stage movement-lottie-stage';
+    stage.innerHTML = `<div class="movement-lottie" role="img" aria-label="${escapeHtml(asset.label)}"></div>
+      <span>Movement demonstration · loops automatically</span>`;
+
+    // Match the cues: hold a single frame when the device asks for reduced motion.
+    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const anim = lottie.loadAnimation({
+      container: stage.querySelector('.movement-lottie'),
+      renderer: 'svg', loop: !still, autoplay: !still, path: asset.path
+    });
+
+    anim.addEventListener('DOMLoaded', () => {
+      if (activeMovementToken !== token || !host.isConnected) { anim.destroy(); return; }
+      destroyMovementAsset();
+      host.innerHTML = '';
+      host.appendChild(stage);
+      host.classList.remove('hidden');
+      activeMovementAnim = anim;
+      if (still) anim.goToAndStop(Math.floor(anim.totalFrames / 2), true);
+    });
+    // Offline and never warmed: keep whatever cue is already showing.
+    anim.addEventListener('data_failed', () => anim.destroy());
+  } catch {
+    // Runtime unavailable — the cue is already on screen, so there is nothing to do.
+  }
+}
+
+function destroyMovementAsset() {
+  if (activeMovementAnim) {
+    try { activeMovementAnim.destroy(); } catch { /* already gone */ }
+    activeMovementAnim = null;
+  }
+}
+
+let lottieRuntimePromise = null;
+function loadLottieRuntime() {
+  if (window.lottie) return Promise.resolve(window.lottie);
+  if (lottieRuntimePromise) return lottieRuntimePromise;
+  lottieRuntimePromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'assets/lottie-light.min.js';
+    script.onload = () => (window.lottie ? resolve(window.lottie) : reject(new Error('lottie missing')));
+    script.onerror = () => { lottieRuntimePromise = null; reject(new Error('lottie failed to load')); };
+    document.head.appendChild(script);
+  });
+  return lottieRuntimePromise;
+}
+
 function closeExerciseGuide() {
   $('exercise-guide-sheet').classList.add('hidden');
+  activeMovementToken = null;
+  destroyMovementAsset();
   $('exercise-guide-demo').innerHTML = '';
   if (exerciseGuideReturnFocus?.isConnected) exerciseGuideReturnFocus.focus();
   exerciseGuideReturnFocus = null;
@@ -506,18 +609,27 @@ function renderExerciseLibrary() {
   const query = $('exercise-search').value.trim();
   const allExercises = catalog.all();
   const visible = allExercises
-    .filter((exercise) => exerciseMatches(exercise, query))
+    .filter((exercise) => exerciseMatchesFilters(exercise, {
+      query,
+      categories: exerciseLibraryFilters.categories,
+      equipment: exerciseLibraryFilters.equipment
+    }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  $('exercise-total').textContent = query
+  const hasFilters = exerciseLibraryFilters.categories.size || exerciseLibraryFilters.equipment.size;
+  $('exercise-total').textContent = query || hasFilters
     ? `${visible.length} / ${allExercises.length}`
     : `${allExercises.length} total`;
+  $('exercise-filter-status').textContent = `${visible.length} exercise${visible.length === 1 ? '' : 's'} shown`;
 
   const library = $('exercise-library');
   library.innerHTML = '';
 
   if (!visible.length) {
-    library.innerHTML = `<p class="empty">No exercises match “${escapeHtml(query)}”.</p>`;
+    const reason = query && hasFilters
+      ? `“${escapeHtml(query)}” and these filters`
+      : query ? `“${escapeHtml(query)}”` : 'these filters';
+    library.innerHTML = `<p class="empty">No exercises match ${reason}.</p>`;
     return;
   }
 
@@ -997,11 +1109,16 @@ $('go-pattern').addEventListener('click', () => {
 
 $('home-exercises').addEventListener('click', () => {
   $('exercise-search').value = '';
+  resetExerciseFilters();
   renderExerciseLibrary();
   showView('exercises');
 });
 
 $('exercise-search').addEventListener('input', renderExerciseLibrary);
+$('exercise-filters-clear').addEventListener('click', () => {
+  resetExerciseFilters();
+  renderExerciseLibrary();
+});
 
 $('exercise-guide-close').addEventListener('click', closeExerciseGuide);
 $('exercise-guide-sheet').addEventListener('click', (event) => {

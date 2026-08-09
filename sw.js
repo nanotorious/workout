@@ -4,7 +4,15 @@
 // Cache-first for the shell, network-first for the seed JSON so a corrected catalogue
 // is picked up when the network happens to be there.
 
-const CACHE = 'workout-v17';
+// Two caches, deliberately.
+//
+// CACHE is version-bumped every deploy and everything else is wiped on activate.
+// ASSET_CACHE holds the movement animations and is NOT version-bumped: they are large,
+// unchanging, and fetched lazily, so tying them to the shell version would silently discard
+// every warmed animation on each deploy — and that would be discovered at the gym, offline.
+const CACHE = 'workout-v19';
+const ASSET_CACHE = 'workout-assets';
+const KEEP = [CACHE, ASSET_CACHE];
 
 const SHELL = [
   './',
@@ -14,12 +22,19 @@ const SHELL = [
   'js/db.js',
   'js/catalog.js',
   'js/exerciseGuides.js',
+  'js/exerciseFilters.js',
   'js/timeline.js',
   'js/pattern.js',
   'js/player.js',
   'js/ui/picker.js',
   'js/ui/stepEditor.js',
   'js/ui/dialog.js',
+  'js/movementAssets.js',
+  // The player runtime is precached: it is one always-needed file, and lazily caching it
+  // would leave an offline-first user with no runtime at all rather than a degraded one.
+  // The animation JSON itself is never listed here — addAll is atomic, so one 404 among
+  // the assets would fail the entire service-worker install.
+  'assets/lottie-light.min.js',
   'manifest.webmanifest',
   'data/exercise_catalog.json',
   'data/workout_templates.json'
@@ -36,7 +51,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))))
+      .then((keys) => Promise.all(keys.filter((key) => !KEEP.includes(key)).map((key) => caches.delete(key))))
       .then(() => self.clients.claim())
   );
 });
@@ -47,6 +62,24 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+
+  // Movement animations: cache-first into the persistent asset cache, and never fall back
+  // to the shell. A miss must resolve to undefined so the caller can show its SVG/CSS cue
+  // instead of receiving index.html where JSON was expected.
+  if (url.pathname.includes('/assets/lottie/')) {
+    event.respondWith(
+      caches.match(request).then((cached) => cached || fetch(request)
+        .then((response) => {
+          if (response && response.ok) {
+            const copy = response.clone();
+            caches.open(ASSET_CACHE).then((cache) => cache.put(request, copy));
+          }
+          return response;
+        })
+        .catch(() => undefined))
+    );
+    return;
+  }
 
   const isSeedData = url.pathname.includes('/data/');
 

@@ -79,9 +79,25 @@
     <span class="exercise-total" id="exercise-total">—</span>
   </header>
 
-  <div class="exercise-search">
+  <div class="exercise-controls">
     <input type="search" id="exercise-search" placeholder="Search all exercises"
            aria-label="Search all exercises" autocomplete="off">
+    <div class="exercise-filter-heading">
+      <span>Filter</span>
+      <button class="link-btn exercise-filters-clear" id="exercise-filters-clear"
+              type="button" disabled>Clear</button>
+    </div>
+    <div class="exercise-filter-row">
+      <span class="exercise-filter-label">Focus</span>
+      <div class="exercise-filter-options" id="exercise-category-filters"
+           role="group" aria-label="Filter by focus"></div>
+    </div>
+    <div class="exercise-filter-row" id="exercise-equipment-filter-row">
+      <span class="exercise-filter-label">Equipment</span>
+      <div class="exercise-filter-options" id="exercise-equipment-filters"
+           role="group" aria-label="Filter by equipment"></div>
+    </div>
+    <p class="sr-only" id="exercise-filter-status" aria-live="polite"></p>
   </div>
 
   <div class="exercise-library" id="exercise-library"></div>
