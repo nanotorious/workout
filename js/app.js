@@ -322,11 +322,17 @@ async function renderHome() {
     const card = document.createElement('div');
     card.className = 'card';
     const when = sessionWhen(session);
-    card.innerHTML = `<div class="card-main">
-        <span class="card-title">${escapeHtml(session.workout.name || 'Untitled workout')}</span>
+
+    // A button, not a div: tapping a past session loads it back into the composer so it
+    // can be run again — the same path a template takes.
+    const main = document.createElement('button');
+    main.type = 'button';
+    main.className = 'card-main';
+    main.innerHTML = `<span class="card-title">${escapeHtml(session.workout.name || 'Untitled workout')}</span>
         <span class="card-sub">${when} · ${formatDuration(session.actualDurationSeconds || 0)}
-        · ${session.completedStepIds.length}/${session.workout.steps.length} steps</span>
-      </div>`;
+        · ${session.completedStepIds.length}/${session.workout.steps.length} steps</span>`;
+    main.addEventListener('click', () => reuseSession(session));
+    card.appendChild(main);
     sessionList.appendChild(makeSwipeRow(
       card,
       session.workout.name || 'Untitled workout',
@@ -672,6 +678,23 @@ function renderExerciseLibrary() {
   }
 }
 
+// Re-run a past session. Like a template, this takes a copy: editing the loaded workout
+// must never rewrite the history record it came from. Fresh step ids for the same reason —
+// the new run gets its own completed/skipped tracking.
+function reuseSession(session) {
+  const name = session.workout.name || 'Untitled workout';
+  state.steps = (session.workout.steps || []).map((step) => ({
+    ...step,
+    id: `step_${Math.random().toString(36).slice(2, 10)}`
+  }));
+  state.sourceTemplateId = null;
+  state.sourceTemplate = null;
+  $('compose-title').textContent = name;
+  renderCompose();
+  showView('compose');
+  toast('Loaded — press Start to run it again');
+}
+
 async function openTemplate(template) {
   // Starting from a template creates a new workout snapshot; live edits never write
   // back to the template (COMPOSER_SPEC.md → Saving Behavior).
@@ -963,6 +986,12 @@ async function startWorkout(resumeDraft = null) {
     onStateChange: (snapshot) => { renderPlayer(snapshot); persistDraft(); },
     onFinish: onWorkoutFinished
   });
+  player.soundEnabled = soundEnabled;
+
+  // Start every workout with the extra controls put away, whatever last time left behind.
+  $('play-more').classList.add('hidden');
+  $('play-more-toggle').setAttribute('aria-expanded', 'false');
+  $('play-more-toggle').querySelector('.play-more-label').textContent = 'More controls';
 
   showView('play');
   player.start(workout, resumeDraft);
@@ -986,6 +1015,48 @@ $('play-pause').addEventListener('click', () => {
   if (player.status === 'paused') player.resume();
   else player.pause();
 });
+$('play-more-toggle').addEventListener('click', () => {
+  const toggle = $('play-more-toggle');
+  const open = toggle.getAttribute('aria-expanded') === 'true';
+  toggle.setAttribute('aria-expanded', String(!open));
+  $('play-more').classList.toggle('hidden', open);
+  $('play-more-toggle').querySelector('.play-more-label').textContent =
+    open ? 'More controls' : 'Hide controls';
+});
+
+// Sound preference outlives the session: being re-muted every workout would be worse
+// than no toggle at all. localStorage, not IndexedDB — it is read during render.
+const SOUND_PREF_KEY = 'workout.soundEnabled';
+
+// Held here as well as on the Player: a new Player is constructed for every workout and
+// defaults to sound on, so the preference has to be re-applied to each instance.
+let soundEnabled = true;
+
+function applySoundPreference(enabled) {
+  soundEnabled = enabled;
+  if (player) player.soundEnabled = enabled;   // no player before the first workout
+  const toggle = $('play-sound-toggle');
+  toggle.setAttribute('aria-pressed', String(enabled));
+  toggle.setAttribute('aria-label', enabled ? 'Mute cue sounds' : 'Unmute cue sounds');
+  toggle.title = enabled ? 'Mute cue sounds' : 'Unmute cue sounds';
+  toggle.querySelector('.play-sound-icon').textContent = enabled ? '🔊' : '🔇';
+}
+
+function loadSoundPreference() {
+  try { return localStorage.getItem(SOUND_PREF_KEY) !== 'false'; } catch { return true; }
+}
+
+$('play-sound-toggle').addEventListener('click', () => {
+  const enabled = !soundEnabled;
+  try { localStorage.setItem(SOUND_PREF_KEY, String(enabled)); } catch { /* private mode */ }
+  applySoundPreference(enabled);
+  // Confirm audibly when switching back on — silence is ambiguous feedback.
+  if (enabled && player) player.beep(880, 120, 0.3);
+  toast(enabled ? 'Sound on' : 'Sound muted');
+});
+
+applySoundPreference(loadSoundPreference());
+
 $('play-skip').addEventListener('click', () => player.skip());
 $('play-restart').addEventListener('click', () => player.restartStep());
 $('play-prev').addEventListener('click', () => player.previousStep());

@@ -1041,11 +1041,15 @@ button:disabled {
   text-transform: uppercase;
 }
 .player.is-rest .play-kind { color: var(--rest); }
-.play-exercise { max-width: 18ch; margin: 0; font-size: clamp(1.45rem, 7vw, 2.7rem); font-weight: 720; letter-spacing: -0.045em; line-height: 1.05; }
+/* Doubled type scale. Collapsing the controls behind a disclosure is what pays for the
+   vertical space these need — the two changes only work together. */
+.play-exercise { max-width: 16ch; margin: 0; font-size: clamp(2.4rem, 12vw, 4.4rem); font-weight: 720; letter-spacing: -0.045em; line-height: 1.02; }
 .play-count {
   margin: 0.25rem 0;
   color: var(--work);
-  font-size: clamp(6.8rem, 37vw, 14rem);
+  /* Two tabular digits run ~1.1em wide, so 62vw keeps "30" inside the viewport
+     with margin to spare. Raising the ceiling matters on the desktop dev view. */
+  font-size: clamp(9.5rem, 62vw, 20rem);
   font-weight: 780;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.085em;
@@ -1062,13 +1066,59 @@ button:disabled {
   border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 1.45rem;
   text-align: center;
 }
-.play-next strong { color: var(--text); }
-.play-controls { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.35rem; }
+.play-next strong { color: var(--text); font-size: 1.55rem; }
+.play-controls { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.35rem; }
 .play-controls .btn { min-width: 0; padding: 0 0.15rem; font-size: 0.7rem; }
-.play-controls:last-of-type { grid-template-columns: 1fr 1fr; }
+.play-more .play-controls:last-child { grid-template-columns: 1fr 1fr; }
+
+/* Pause is the only always-visible control, so it gets the full width. */
+.play-controls-primary { grid-template-columns: 1fr; }
+.play-controls-primary .btn { font-size: 1rem; }
+
+/* Disclosure for everything else: the screen stays quiet until asked. */
+.play-more-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.5rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 680;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  -webkit-tap-highlight-color: transparent;
+}
+.play-more-toggle:focus-visible { outline: 2px solid var(--accent-hot); outline-offset: 2px; }
+.play-more-caret { display: inline-block; font-size: 0.6rem; transition: transform 160ms ease; }
+.play-more-toggle[aria-expanded="true"] .play-more-caret { transform: rotate(180deg); }
+.play-more { display: grid; gap: 0.35rem; }
+
+.player-topbar { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.play-sound-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 1.1rem;
+  line-height: 1;
+  -webkit-tap-highlight-color: transparent;
+}
+.play-sound-toggle:focus-visible { outline: 2px solid var(--accent-hot); outline-offset: 2px; }
+.play-sound-toggle[aria-pressed="false"] { opacity: 0.55; }
 .play-controls:last-of-type .btn { font-size: 0.78rem; }
 
 /* Finish */

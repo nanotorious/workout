@@ -192,7 +192,13 @@
 
 <!-- Player -->
 <section class="view hidden player" id="view-play" data-view="play">
-  <div class="player-label"><span class="status-dot"></span> Live session</div>
+  <div class="player-topbar">
+    <div class="player-label"><span class="status-dot"></span> Live session</div>
+    <button class="play-sound-toggle" id="play-sound-toggle" type="button"
+            aria-pressed="true" aria-label="Mute cue sounds" title="Mute cue sounds">
+      <span class="play-sound-icon" aria-hidden="true">🔊</span>
+    </button>
+  </div>
   <div class="play-progress"><div class="play-progress-fill" id="play-progress-fill"></div></div>
 
   <div class="play-meta">
@@ -212,17 +218,30 @@
     Next: <strong id="play-next">—</strong>
   </div>
 
-  <div class="play-controls">
-    <button class="btn" id="play-prev" type="button">Prev</button>
-    <button class="btn" id="play-restart" type="button">Restart</button>
-    <button class="btn btn-primary" id="play-pause" type="button">Pause</button>
-    <button class="btn" id="play-add-ten" type="button">+10s</button>
-    <button class="btn" id="play-skip" type="button">Skip</button>
+  <!-- Pause stays out here on its own. It is the one control needed mid-set, and burying
+       it behind a disclosure would cost more than the tidier screen is worth. -->
+  <div class="play-controls play-controls-primary">
+    <button class="btn btn-primary btn-large" id="play-pause" type="button">Pause</button>
   </div>
 
-  <div class="play-controls">
-    <button class="btn btn-quiet" id="play-edit" type="button">Edit upcoming</button>
-    <button class="btn btn-quiet" id="play-quit" type="button">End workout</button>
+  <button class="play-more-toggle" id="play-more-toggle" type="button"
+          aria-expanded="false" aria-controls="play-more">
+    <span class="play-more-caret" aria-hidden="true">▼</span>
+    <span class="play-more-label">More controls</span>
+  </button>
+
+  <div class="play-more hidden" id="play-more">
+    <div class="play-controls">
+      <button class="btn" id="play-prev" type="button">Prev</button>
+      <button class="btn" id="play-restart" type="button">Restart</button>
+      <button class="btn" id="play-add-ten" type="button">+10s</button>
+      <button class="btn" id="play-skip" type="button">Skip</button>
+    </div>
+
+    <div class="play-controls">
+      <button class="btn btn-quiet" id="play-edit" type="button">Edit upcoming</button>
+      <button class="btn btn-quiet" id="play-quit" type="button">End workout</button>
+    </div>
   </div>
 </section>
 

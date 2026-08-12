@@ -69,6 +69,16 @@ export class Player {
     osc.stop(now + durationMs / 1000 + 0.02);
   }
 
+  // A two-note chime for phase changes, so starting a step is unmistakably different
+  // from the flat 3-2-1 ticks that precede it. Rising into work, falling into rest.
+  chime(kind) {
+    if (!this.soundEnabled || !this.audioCtx) return;
+    const notes = kind === 'rest' ? [660, 440] : [660, 990];
+    notes.forEach((frequency, i) => {
+      setTimeout(() => this.beep(frequency, 180, 0.32), i * 130);
+    });
+  }
+
   vibrate(pattern) {
     if (this.vibrationEnabled && 'vibrate' in navigator) navigator.vibrate(pattern);
   }
@@ -132,7 +142,7 @@ export class Player {
     }
 
     if (elapsedSeconds === 0) {
-      this.beep(step.kind === 'rest' ? 520 : 880, 160);
+      this.chime(step.kind);
       this.vibrate(step.kind === 'rest' ? 120 : [90, 60, 90]);
     }
     this.onStepChange(this.snapshot());
