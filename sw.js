@@ -10,7 +10,10 @@
 // ASSET_CACHE holds the movement animations and is NOT version-bumped: they are large,
 // unchanging, and fetched lazily, so tying them to the shell version would silently discard
 // every warmed animation on each deploy — and that would be discovered at the gym, offline.
-const CACHE = 'workout-v19';
+// Bump this on EVERY deploy that changes index.html, css or js. The fetch handler is
+// cache-first for the shell, so an unchanged sw.js means the browser never reinstalls and
+// the old shell is served forever — the update simply never arrives on the phone.
+const CACHE = 'workout-v20';
 const ASSET_CACHE = 'workout-assets';
 const KEEP = [CACHE, ASSET_CACHE];
 
