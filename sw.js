@@ -13,7 +13,7 @@
 // Bump this on EVERY deploy that changes index.html, css or js. The fetch handler is
 // cache-first for the shell, so an unchanged sw.js means the browser never reinstalls and
 // the old shell is served forever — the update simply never arrives on the phone.
-const CACHE = 'workout-v21';
+const CACHE = 'workout-v22';
 const ASSET_CACHE = 'workout-assets';
 const KEEP = [CACHE, ASSET_CACHE];
 

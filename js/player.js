@@ -6,7 +6,9 @@
 // locked is what spike/timer-spike.html exists to answer (AUDIT.md F2).
 
 const TICK_MS = 200;
-const COUNTDOWN_FROM = 3;
+// Ticks at 5-4-3-2-1 before a step ends. Long enough to get set for the next movement
+// rather than only registering the change as it happens.
+export const COUNTDOWN_FROM = 5;
 
 export class Player {
   constructor({ onTick, onStepChange, onFinish, onStateChange }) {

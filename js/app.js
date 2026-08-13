@@ -11,7 +11,7 @@ import {
   EXERCISE_CATEGORIES, EXERCISE_CATEGORY_LABELS, equipmentFilterOptions,
   exerciseMatchesFilters, formatFilterLabel
 } from './exerciseFilters.js';
-import { Player } from './player.js';
+import { Player, COUNTDOWN_FROM } from './player.js';
 import { compilePrimaryAnchorRest, compileTemplate } from './pattern.js';
 import {
   createWorkStep, createRestStep, createWorkout, addStep, removeStep,
@@ -934,7 +934,10 @@ function renderPlayer(snapshot) {
   const isRest = step.kind === 'rest';
   view.classList.toggle('is-rest', isRest);
   view.classList.toggle('is-paused', snapshot.status === 'paused');
-  view.classList.toggle('is-ending', snapshot.remainingSeconds !== null && snapshot.remainingSeconds <= 3);
+  // Same threshold as the audible ticks: a colour change at a different moment to the
+  // beeps reads as a glitch rather than as two cues for the same thing.
+  view.classList.toggle('is-ending',
+    snapshot.remainingSeconds !== null && snapshot.remainingSeconds <= COUNTDOWN_FROM);
 
   $('play-kind').textContent = isRest ? 'Rest' : 'Work';
   $('play-exercise').textContent = step.exerciseName || 'Rest';
@@ -1252,11 +1255,29 @@ $('resume-discard').addEventListener('click', async () => {
   await renderHome();
 });
 
-$('home-help').addEventListener('click', () => dialog.alert(
-  'iCloud handoff',
-  '1. On this device, tap Backup.\n2. Save workout-sync.json in iCloud Drive → Workout App Sync.\n3. On the other device, tap Restore and choose that file.\n4. Tap Backup again when you finish.\n\nBackup includes hidden and deleted templates/sessions. On iPhone, choose Save to Files first. Use one device at a time. This is manual, not automatic sync.',
-  'Got it'
-));
+// Read from the live cache rather than a hardcoded string: this reports the shell the
+// device is ACTUALLY running, which is the only version worth knowing when a phone is
+// serving a stale build. A hardcoded constant would ship inside that stale build and lie.
+async function buildVersion() {
+  try {
+    const keys = await caches.keys();
+    const shell = keys.find((key) => /^workout-v\d+$/.test(key));
+    if (!shell) return 'not cached yet (online only)';
+    return shell.replace('workout-', '');
+  } catch {
+    return 'unavailable';
+  }
+}
+
+$('home-help').addEventListener('click', async () => {
+  const version = await buildVersion();
+  dialog.alert(
+    'iCloud handoff',
+    '1. On this device, tap Backup.\n2. Save workout-sync.json in iCloud Drive → Workout App Sync.\n3. On the other device, tap Restore and choose that file.\n4. Tap Backup again when you finish.\n\nBackup includes hidden and deleted templates/sessions. On iPhone, choose Save to Files first. Use one device at a time. This is manual, not automatic sync.'
+    + `\n\n———\nBuild on this device: ${version}\nIf that looks older than expected, fully close the app and reopen to pick up the latest.`,
+    'Got it'
+  );
+});
 
 $('home-export').addEventListener('click', async () => {
   const payload = await db.exportAll();
