@@ -987,6 +987,8 @@ async function startWorkout(resumeDraft = null) {
     onFinish: onWorkoutFinished
   });
   player.soundEnabled = soundEnabled;
+  // Inherit the already-unlocked context rather than making a new suspended one.
+  if (sharedAudioCtx) { player.audioCtx = sharedAudioCtx; player.audioUnlocked = sharedAudioUnlocked; }
 
   // Start every workout with the extra controls put away, whatever last time left behind.
   $('play-more').classList.add('hidden');
@@ -1031,6 +1033,35 @@ const SOUND_PREF_KEY = 'workout.soundEnabled';
 // Held here as well as on the Player: a new Player is constructed for every workout and
 // defaults to sound on, so the preference has to be re-applied to each instance.
 let soundEnabled = true;
+
+// One AudioContext for the whole app, unlocked on the very first touch anywhere rather
+// than waiting for "Start workout". iOS only grants audio inside a real user gesture, and
+// by the time Start is tapped the user has usually already tapped a template — so
+// unlocking early is strictly more reliable. A fresh Player then inherits this context
+// instead of creating its own suspended one.
+let sharedAudioCtx = null;
+let sharedAudioUnlocked = false;
+
+function unlockSharedAudio() {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    if (!sharedAudioCtx) sharedAudioCtx = new Ctx();
+    sharedAudioCtx.resume().catch(() => {});
+    if (!sharedAudioUnlocked) {
+      const source = sharedAudioCtx.createBufferSource();
+      source.buffer = sharedAudioCtx.createBuffer(1, 1, 22050);
+      source.connect(sharedAudioCtx.destination);
+      source.start(0);
+      sharedAudioUnlocked = true;
+    }
+    if (player) { player.audioCtx = sharedAudioCtx; player.audioUnlocked = true; }
+  } catch { /* audio is a nicety; never let it break a workout */ }
+}
+
+for (const evt of ['pointerdown', 'touchend', 'click']) {
+  document.addEventListener(evt, unlockSharedAudio, { capture: true, passive: true });
+}
 
 function applySoundPreference(enabled) {
   soundEnabled = enabled;

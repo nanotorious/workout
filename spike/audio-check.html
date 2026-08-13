@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Audio check — Workout App</title>
+<style>
+  :root { color-scheme: dark; --accent:#ff5a1f; --muted:#8f8b84; }
+  body { margin:0; background:#080807; color:#f6f4ef; padding:1.25rem 1rem 4rem;
+         font:16px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Display",sans-serif; }
+  h1 { font-size:1.25rem; margin:0 0 .3rem; }
+  p.sub { color:var(--muted); font-size:.85rem; margin:0 0 1.2rem; }
+  button { font:inherit; font-weight:700; width:100%; min-height:3.4rem; margin:0 0 .6rem;
+           border:0; border-radius:999px; background:var(--accent); color:#160702;
+           -webkit-tap-highlight-color:transparent; }
+  button.alt { background:#181714; color:#f6f4ef; border:1px solid rgba(255,255,255,.18); }
+  #out { font-family:ui-monospace,Menlo,monospace; font-size:.78rem; white-space:pre-wrap;
+         background:#11110f; border:1px solid rgba(255,255,255,.1); border-radius:.75rem;
+         padding:.8rem; margin-top:1rem; }
+  .step { border-left:2px solid var(--accent); padding-left:.7rem; margin:.9rem 0;
+          font-size:.85rem; color:#bdb8af; }
+</style>
+</head>
+<body>
+
+<h1>Audio check</h1>
+<p class="sub">Tap the buttons in order and note which ones you actually <em>hear</em>.
+The readout below shows what the browser claims is happening — the two often disagree,
+and that disagreement is the useful part.</p>
+
+<div class="step">1 — Web Audio, the method the workout player uses.</div>
+<button id="b1" type="button">Play Web Audio beep</button>
+
+<div class="step">2 — Web Audio after an explicit silent-buffer unlock (the iOS technique).</div>
+<button id="b2" type="button" class="alt">Unlock, then beep</button>
+
+<div class="step">3 — An HTML audio element instead. If this is audible and 1–2 are not,
+the fix is to route cues through an audio element on iOS.</div>
+<button id="b3" type="button" class="alt">Play &lt;audio&gt; beep</button>
+
+<div id="out">Tap a button…</div>
+
+<script>
+const out = document.getElementById('out');
+let ctx = null, unlocked = false;
+const log = [];
+
+function report(note) {
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (note) log.unshift(note);
+  out.textContent = [
+    'hasWebAudio  : ' + Boolean(Ctx),
+    'context      : ' + (ctx ? 'created' : 'none'),
+    'state        : ' + (ctx ? ctx.state : '—'),
+    'unlocked     : ' + unlocked,
+    'sampleRate   : ' + (ctx ? ctx.sampleRate : '—'),
+    'currentTime  : ' + (ctx ? ctx.currentTime.toFixed(3) : '—'),
+    'standalone   : ' + (window.navigator.standalone === true),
+    'ua           : ' + navigator.userAgent.slice(0, 70),
+    '',
+    ...log.slice(0, 12)
+  ].join('\n');
+}
+
+function ensureCtx() {
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return null;
+  if (!ctx) ctx = new Ctx();
+  return ctx;
+}
+
+function webAudioBeep(frequency = 880, ms = 300) {
+  const c = ensureCtx();
+  if (!c) { report('no Web Audio support'); return; }
+  c.resume();
+  const now = c.currentTime;
+  const osc = c.createOscillator();
+  const gain = c.createGain();
+  osc.type = 'sine';
+  osc.frequency.value = frequency;
+  gain.gain.setValueAtTime(0.001, now);
+  gain.gain.exponentialRampToValueAtTime(0.4, now + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + ms / 1000);
+  osc.connect(gain).connect(c.destination);
+  osc.start(now);
+  osc.stop(now + ms / 1000 + 0.02);
+}
+
+document.getElementById('b1').addEventListener('click', () => {
+  webAudioBeep(880);
+  report('1: played Web Audio beep (state ' + (ctx ? ctx.state : '?') + ')');
+});
+
+document.getElementById('b2').addEventListener('click', () => {
+  const c = ensureCtx();
+  if (!c) { report('no Web Audio support'); return; }
+  c.resume();
+  const source = c.createBufferSource();
+  source.buffer = c.createBuffer(1, 1, 22050);
+  source.connect(c.destination);
+  source.start(0);
+  unlocked = true;
+  setTimeout(() => { webAudioBeep(660); report('2: unlocked then beeped'); }, 60);
+});
+
+// A very short WAV, inline so the page stays self-contained and works offline.
+const WAV = 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACB'
+  + 'hYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT'
+  + 'AoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWTAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWTAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWTAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWTAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWTAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWTAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWTAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWTAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWTAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWTAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWTAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWTAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTY=';
+
+const el = new Audio(WAV);
+el.preload = 'auto';
+document.getElementById('b3').addEventListener('click', () => {
+  el.currentTime = 0;
+  el.play()
+    .then(() => report('3: <audio> play() resolved'))
+    .catch((e) => report('3: <audio> play() REJECTED — ' + e.name));
+});
+
+report();
+</script>
+</body>
+</html>

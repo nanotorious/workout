@@ -28,6 +28,7 @@ export class Player {
 
     this.ticker = null;
     this.audioCtx = null;
+    this.audioUnlocked = false;
     this.wakeLock = null;
     this.beepedAt = new Set();
     this.soundEnabled = true;
@@ -40,6 +41,11 @@ export class Player {
   // --- Cues ------------------------------------------------------------------
 
   // Must be called from inside a user gesture or the context stays suspended.
+  //
+  // iOS needs more than resume(): the context only truly unlocks once a source node has
+  // been started inside the gesture. A one-frame silent buffer does that inaudibly. Without
+  // it Safari reports state 'running' while producing no output at all — which is exactly
+  // what "no sounds, ring on, not muted" looks like.
   unlockAudio() {
     try {
       if (!this.audioCtx) {
@@ -47,10 +53,34 @@ export class Player {
         if (!Ctx) return Promise.resolve();
         this.audioCtx = new Ctx();
       }
-      return this.audioCtx.resume();
+      const resumed = this.audioCtx.resume();
+      if (!this.audioUnlocked) {
+        const buffer = this.audioCtx.createBuffer(1, 1, 22050);
+        const source = this.audioCtx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(this.audioCtx.destination);
+        source.start(0);
+        this.audioUnlocked = true;
+      }
+      return resumed;
     } catch (err) {
       return Promise.reject(err);
     }
+  }
+
+  // What the audio stack actually thinks it is doing. Used by the diagnostic page —
+  // "no sound" has too many possible causes to guess at from a description.
+  audioDiagnostics() {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    return {
+      hasWebAudio: Boolean(Ctx),
+      contextCreated: Boolean(this.audioCtx),
+      state: this.audioCtx ? this.audioCtx.state : 'none',
+      unlocked: Boolean(this.audioUnlocked),
+      soundEnabled: this.soundEnabled,
+      sampleRate: this.audioCtx ? this.audioCtx.sampleRate : null,
+      currentTime: this.audioCtx ? Number(this.audioCtx.currentTime.toFixed(3)) : null
+    };
   }
 
   beep(frequency, durationMs, volume = 0.35) {
@@ -74,9 +104,13 @@ export class Player {
   chime(kind) {
     if (!this.soundEnabled || !this.audioCtx) return;
     const notes = kind === 'rest' ? [660, 440] : [660, 990];
-    notes.forEach((frequency, i) => {
+    const play = () => notes.forEach((frequency, i) => {
       setTimeout(() => this.beep(frequency, 180, 0.32), i * 130);
     });
+    // The first chime of a workout fires microseconds after unlockAudio(), while the
+    // context is still resuming — scheduling into a suspended clock loses the note.
+    if (this.audioCtx.state === 'suspended') this.audioCtx.resume().then(play).catch(play);
+    else play();
   }
 
   vibrate(pattern) {
